@@ -53,7 +53,7 @@
 @section Scripts {
 <script>
     // 动态构建 API 地址，适配内网和外网访问
-    const API_BASE_URL = '/api';
+    const API_BASE_URL = API_CONFIG.baseUrl;
     const token = localStorage.getItem('token');
     
     if (!token) {

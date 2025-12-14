@@ -317,7 +317,7 @@
 
 @section Scripts {
 <script>
-    const API_BASE_URL = '/api';
+    const API_BASE_URL = API_CONFIG.baseUrl;
     const token = localStorage.getItem('token');
     const schemeId = document.getElementById('schemeId').value;
     const isEdit = schemeId && schemeId !== '';
