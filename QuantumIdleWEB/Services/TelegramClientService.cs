@@ -525,15 +525,15 @@ namespace QuantumIdleWEB.Services
                     switch (messageState)
                     {
                         case GameMessageState.StartBetting:
-                            gameService.AddLog($"[{groupId}] 开始销售 期号: {context.CurrentIssue}");
                             // 为每个用户触发投注
                             var bettingService = scope.ServiceProvider.GetRequiredService<BettingService>();
                             foreach (var userGroup in userSchemes)
                             {
                                 var userId = userGroup.Key;
+                                gameService.AddLog($"[{groupId}] 开始销售 期号: {context.CurrentIssue}", userId);
                                 // 获取方案名用于日志
                                 var schemeNames = string.Join(",", userGroup.Select(s => s.Name));
-                                gameService.AddLog($"[{groupId}] 处理方案: {schemeNames}");
+                                gameService.AddLog($"[{groupId}] 处理方案: {schemeNames}", userId);
                                 await bettingService.ProcessBetting(groupId, context, userId);
                             }
                             break;
@@ -543,18 +543,22 @@ namespace QuantumIdleWEB.Services
                             var lastRecord = context.History.FirstOrDefault();
                             if (lastRecord != null)
                             {
-                                gameService.AddLog($"[{groupId}] 开奖结果 期号: {lastRecord.IssueNumber} 结果: {lastRecord.Result}");
                                 var settlementService = scope.ServiceProvider.GetRequiredService<SettlementService>();
                                 // 为每个用户触发结算
                                 foreach (var userGroup in userSchemes)
                                 {
                                     var userId = userGroup.Key;
+                                    gameService.AddLog($"[{groupId}] 开奖结果 期号: {lastRecord.IssueNumber} 结果: {lastRecord.Result}", userId);
                                     await settlementService.ProcessSettlement(groupId, lastRecord.IssueNumber, lastRecord.Result, userId);
                                 }
                             }
                             else
                             {
-                                gameService.AddLog($"[{groupId}] 开奖消息解析失败，无法获取期号和结果");
+                                // 无法确定用户，记录到所有相关用户
+                                foreach (var userGroup in userSchemes)
+                                {
+                                    gameService.AddLog($"[{groupId}] 开奖消息解析失败，无法获取期号和结果", userGroup.Key);
+                                }
                             }
                             break;
                     }
@@ -562,7 +566,11 @@ namespace QuantumIdleWEB.Services
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, $"处理消息时出错: 群组 {groupId}");
-                    gameService.AddLog($"[错误] 处理消息失败: {ex.Message}");
+                    // 错误日志记录到所有相关用户
+                    foreach (var userGroup in userSchemes)
+                    {
+                        gameService.AddLog($"[错误] 处理消息失败: {ex.Message}", userGroup.Key);
+                    }
                 }
             }
         }

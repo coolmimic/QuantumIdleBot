@@ -57,7 +57,7 @@ namespace QuantumIdleWEB.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "结算时出错");
-                _gameService.AddLog($"[错误] 结算失败: {ex.Message}");
+                _gameService.AddLog($"[错误] 结算失败: {ex.Message}", userId);
             }
         }
 
@@ -120,7 +120,7 @@ namespace QuantumIdleWEB.Services
 
             // F. 日志
             string winLose = netProfit > 0 ? "赢" : (netProfit == 0 ? "平" : "输");
-            _gameService.AddLog($"[结算] {userName}/{schemeName} | 结果:{openResult} | {winLose} | 盈亏:{netProfit:F2}");
+            _gameService.AddLog($"[结算] {userName}/{schemeName} | 结果:{openResult} | {winLose} | 盈亏:{netProfit:F2}", order.AppUserId);
 
             // G. 风控检查
             await CheckRiskControl(order, dbContext);
@@ -261,14 +261,14 @@ namespace QuantumIdleWEB.Services
             if (scheme.StopProfitAmount > 0 && totalProfit >= scheme.StopProfitAmount)
             {
                 scheme.IsEnabled = false;
-                _gameService.AddLog($"[风控] 方案 {scheme.Name} 盈利 {totalProfit:F2} 达到目标，已停止");
+                _gameService.AddLog($"[风控] 方案 {scheme.Name} 盈利 {totalProfit:F2} 达到目标，已停止", scheme.UserId);
             }
 
             // 止损检查
             if (scheme.StopLossAmount > 0 && totalProfit <= -scheme.StopLossAmount)
             {
                 scheme.IsEnabled = false;
-                _gameService.AddLog($"[风控] 方案 {scheme.Name} 亏损 {totalProfit:F2} 达到止损，已停止");
+                _gameService.AddLog($"[风控] 方案 {scheme.Name} 亏损 {totalProfit:F2} 达到止损，已停止", scheme.UserId);
             }
         }
     }

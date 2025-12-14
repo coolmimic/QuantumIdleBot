@@ -48,7 +48,7 @@ namespace QuantumIdleWEB.Services
 
                 if (schemes.Count == 0)
                 {
-                    _gameService.AddLog($"[{groupId}] 没有启用的方案");
+                    _gameService.AddLog($"[{groupId}] 没有启用的方案", userId);
                     return;
                 }
 
@@ -56,7 +56,7 @@ namespace QuantumIdleWEB.Services
                 var orders = GenerateOrders(schemes, context, userId);
                 if (orders.Count == 0)
                 {
-                    _gameService.AddLog($"[{groupId}] 没有生成注单");
+                    _gameService.AddLog($"[{groupId}] 没有生成注单", userId);
                     return;
                 }
 
@@ -74,7 +74,7 @@ namespace QuantumIdleWEB.Services
                     {
                         // 找到对应的方案名
                         var schemeName = schemes.FirstOrDefault(s => s.Id.ToString() == order.SchemeId)?.Name ?? order.SchemeId;
-                        _gameService.AddLog($"[模拟投注] {userName}/{schemeName} | 内容:{order.BetContent} | 金额:{order.Amount}");
+                        _gameService.AddLog($"[模拟投注] {userName}/{schemeName} | 内容:{order.BetContent} | 金额:{order.Amount}", userId);
                     }
                 }
                 else
@@ -87,7 +87,7 @@ namespace QuantumIdleWEB.Services
             {
                 _logger.LogError(ex, "处理投注时出错");
                 var innerMsg = ex.InnerException?.Message ?? ex.Message;
-                _gameService.AddLog($"[错误] 投注失败: {innerMsg}");
+                _gameService.AddLog($"[错误] 投注失败: {innerMsg}", userId);
             }
         }
 
@@ -111,7 +111,7 @@ namespace QuantumIdleWEB.Services
 
                     if (betTargets == null || betTargets.Count == 0)
                     {
-                        _gameService.AddLog($"[{scheme.Name}] 出号规则未生成下注内容");
+                        _gameService.AddLog($"[{scheme.Name}] 出号规则未生成下注内容", scheme.UserId);
                         continue;
                     }
 
@@ -153,7 +153,7 @@ namespace QuantumIdleWEB.Services
                 }
                 catch (Exception ex)
                 {
-                    _gameService.AddLog($"[生成订单错误] {scheme.Name}: {ex.Message}");
+                    _gameService.AddLog($"[生成订单错误] {scheme.Name}: {ex.Message}", scheme.UserId);
                 }
             }
 

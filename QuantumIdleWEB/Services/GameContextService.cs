@@ -1,4 +1,5 @@
 using QuantumIdleWEB.GameCore;
+using System.Collections.Concurrent;
 
 namespace QuantumIdleWEB.Services
 {
@@ -8,10 +9,19 @@ namespace QuantumIdleWEB.Services
     public class GameContextService
     {
         private readonly Dictionary<long, GroupGameContext> _contexts = new();
-        private readonly List<string> _logs = new();
+        // 按用户隔离日志，key = userId
+        private readonly ConcurrentDictionary<int, List<string>> _userLogs = new();
         private readonly object _lockObj = new();
 
-        // 全局状态
+        // 当前操作的用户ID（用于日志记录）
+        private static readonly AsyncLocal<int> _currentUserId = new();
+        public static int CurrentUserId 
+        { 
+            get => _currentUserId.Value;
+            set => _currentUserId.Value = value;
+        }
+
+        // 全局状态（per-user状态存储在数据库中）
         public bool IsRunning { get; set; } = false;
         public bool IsSimulation { get; set; } = false;
         public decimal Balance { get; set; } = 0;
@@ -66,31 +76,57 @@ namespace QuantumIdleWEB.Services
         }
 
         /// <summary>
-        /// 添加日志
+        /// 添加日志（使用当前用户ID）
         /// </summary>
         public void AddLog(string message)
         {
+            AddLog(message, CurrentUserId);
+        }
+
+        /// <summary>
+        /// 添加日志（指定用户ID）
+        /// </summary>
+        public void AddLog(string message, int userId)
+        {
             var logEntry = $"[{DateTime.Now:HH:mm:ss}] {message}";
-            lock (_logs)
+            
+            if (userId > 0)
             {
-                _logs.Insert(0, logEntry);
-                if (_logs.Count > 500)
+                var userLogs = _userLogs.GetOrAdd(userId, _ => new List<string>());
+                lock (userLogs)
                 {
-                    _logs.RemoveAt(_logs.Count - 1);
+                    userLogs.Insert(0, logEntry);
+                    if (userLogs.Count > 500)
+                    {
+                        userLogs.RemoveAt(userLogs.Count - 1);
+                    }
                 }
             }
+            
             OnLog?.Invoke(logEntry);
         }
 
         /// <summary>
-        /// 获取日志
+        /// 获取日志（指定用户ID）
+        /// </summary>
+        public List<string> GetLogs(int userId, int count = 100)
+        {
+            if (_userLogs.TryGetValue(userId, out var logs))
+            {
+                lock (logs)
+                {
+                    return logs.Take(count).ToList();
+                }
+            }
+            return new List<string>();
+        }
+
+        /// <summary>
+        /// 获取日志（使用当前用户ID，向后兼容）
         /// </summary>
         public List<string> GetLogs(int count = 100)
         {
-            lock (_logs)
-            {
-                return _logs.Take(count).ToList();
-            }
+            return GetLogs(CurrentUserId, count);
         }
 
         /// <summary>
@@ -111,14 +147,25 @@ namespace QuantumIdleWEB.Services
         }
 
         /// <summary>
-        /// 清除日志
+        /// 清除日志（指定用户ID）
+        /// </summary>
+        public void ClearLogs(int userId)
+        {
+            if (_userLogs.TryGetValue(userId, out var logs))
+            {
+                lock (logs)
+                {
+                    logs.Clear();
+                }
+            }
+        }
+
+        /// <summary>
+        /// 清除日志（使用当前用户ID，向后兼容）
         /// </summary>
         public void ClearLogs()
         {
-            lock (_logs)
-            {
-                _logs.Clear();
-            }
+            ClearLogs(CurrentUserId);
         }
     }
 }

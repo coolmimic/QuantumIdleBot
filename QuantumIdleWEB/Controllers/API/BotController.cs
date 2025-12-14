@@ -120,9 +120,12 @@ namespace QuantumIdleWeb.Controllers.Api
         [HttpPost("start")]
         public IActionResult Start()
         {
+            var userId = CurrentUserId;
+            GameContextService.CurrentUserId = userId;
+            
             _gameService.IsRunning = true;
             var mode = _gameService.IsSimulation ? "模拟" : "实盘";
-            _gameService.AddLog($">>> 开始挂机 ({mode})");
+            _gameService.AddLog($">>> 开始挂机 ({mode})", userId);
             
             return Ok(new { success = true, message = "已开始挂机", data = _gameService.GetStatus() });
         }
@@ -133,8 +136,9 @@ namespace QuantumIdleWeb.Controllers.Api
         [HttpPost("stop")]
         public IActionResult Stop()
         {
+            var userId = CurrentUserId;
             _gameService.IsRunning = false;
-            _gameService.AddLog(">>> 挂机已停止");
+            _gameService.AddLog(">>> 挂机已停止", userId);
             
             return Ok(new { success = true, message = "已停止挂机", data = _gameService.GetStatus() });
         }
@@ -145,9 +149,10 @@ namespace QuantumIdleWeb.Controllers.Api
         [HttpPost("mode")]
         public IActionResult ToggleMode([FromBody] ToggleModeRequest request)
         {
+            var userId = CurrentUserId;
             _gameService.IsSimulation = request.IsSimulation;
             var mode = request.IsSimulation ? "模拟模式" : "真实模式";
-            _gameService.AddLog($">>> 切换到{mode}");
+            _gameService.AddLog($">>> 切换到{mode}", userId);
             
             return Ok(new { success = true, message = $"已切换到{mode}", data = _gameService.GetStatus() });
         }
@@ -158,7 +163,8 @@ namespace QuantumIdleWeb.Controllers.Api
         [HttpGet("logs")]
         public IActionResult GetLogs([FromQuery] int count = 100)
         {
-            var logs = _gameService.GetLogs(count);
+            var userId = CurrentUserId;
+            var logs = _gameService.GetLogs(userId, count);
             return Ok(new { success = true, data = logs });
         }
 
@@ -168,7 +174,8 @@ namespace QuantumIdleWeb.Controllers.Api
         [HttpPost("logs/clear")]
         public IActionResult ClearLogs()
         {
-            _gameService.ClearLogs();
+            var userId = CurrentUserId;
+            _gameService.ClearLogs(userId);
             return Ok(new { success = true, message = "日志已清除" });
         }
     }
