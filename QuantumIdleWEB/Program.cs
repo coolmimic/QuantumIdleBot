@@ -95,6 +95,9 @@ builder.Services.AddSingleton<QuantumIdleWEB.Services.GameContextService>();
 builder.Services.AddScoped<QuantumIdleWEB.Services.BettingService>();
 builder.Services.AddScoped<QuantumIdleWEB.Services.SettlementService>();
 
+// 注册推送通知服务
+builder.Services.AddSingleton<QuantumIdleWEB.Services.NotificationService>();
+
 // ע�� TelegramBotClient
 builder.Services.AddSingleton<Telegram.Bot.ITelegramBotClient>(provider =>
 {

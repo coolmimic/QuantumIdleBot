@@ -367,16 +367,19 @@ namespace QuantumIdleWeb.Controllers.Api
         {
             var text = @"💳 *购买/续费*
 
-📦 月卡 - ¥99 (30天)
-📦 季卡 - ¥249 (90天) *推荐*
-📦 年卡 - ¥799 (365天)
+支付方式: USDT-TRC20 自动发货
+
+⚡️ *天卡* - `5 U` (1天)
+� *月卡* - `99 U` (30天)
+� *季卡* - `249 U` (90天)
+� *年卡* - `599 U` (365天) 🔥日均仅1.6U
 
 ━━━━━━━━━━━━━━
-联系客服购买";
+请通过卡密机器人购买👇";
 
             var keyboard = new InlineKeyboardMarkup(new[]
             {
-                new[] { InlineKeyboardButton.WithUrl("📱 联系客服", "https://t.me/your_support") },
+                new[] { InlineKeyboardButton.WithUrl("� 点击购买卡密", "https://t.me/liangzi_cardbot") },
                 new[] { InlineKeyboardButton.WithUrl("🌐 官网购买", "https://liangzi.love") },
                 new[] { InlineKeyboardButton.WithCallbackData("◀️ 返回", "menu") }
             });

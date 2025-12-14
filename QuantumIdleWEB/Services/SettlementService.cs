@@ -14,15 +14,18 @@ namespace QuantumIdleWEB.Services
     {
         private readonly IServiceProvider _serviceProvider;
         private readonly GameContextService _gameService;
+        private readonly NotificationService _notificationService;
         private readonly ILogger<SettlementService> _logger;
 
         public SettlementService(
             IServiceProvider serviceProvider,
             GameContextService gameService,
+            NotificationService notificationService,
             ILogger<SettlementService> logger)
         {
             _serviceProvider = serviceProvider;
             _gameService = gameService;
+            _notificationService = notificationService;
             _logger = logger;
         }
 
@@ -122,7 +125,10 @@ namespace QuantumIdleWEB.Services
             string winLose = netProfit > 0 ? "赢" : (netProfit == 0 ? "平" : "输");
             _gameService.AddLog($"[结算] {userName}/{schemeName} | 结果:{openResult} | {winLose} | 盈亏:{netProfit:F2}", order.AppUserId);
 
-            // G. 风控检查
+            // G. 推送注单结果到用户 Telegram
+            _ = _notificationService.PushOrderResult(order.AppUserId, order);
+
+            // H. 风控检查
             await CheckRiskControl(order, dbContext);
         }
 
