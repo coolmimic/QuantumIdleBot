@@ -86,6 +86,21 @@ namespace QuantumIdleWEB.Controllers.API
                     return BadRequest(new { success = false, message = "方案名称不能为空" });
                 }
 
+                // 序列化配置时保持原有的字段名大小写
+                string oddsConfigJson = null;
+                if (request.OddsConfig != null)
+                {
+                    oddsConfigJson = JsonSerializer.Serialize(request.OddsConfig);
+                    _logger.LogInformation("保存 OddsConfig: {OddsConfig}", oddsConfigJson);
+                }
+
+                string drawRuleConfigJson = null;
+                if (request.DrawRuleConfig != null)
+                {
+                    drawRuleConfigJson = JsonSerializer.Serialize(request.DrawRuleConfig);
+                    _logger.LogInformation("保存 DrawRuleConfig: {DrawRuleConfig}", drawRuleConfigJson);
+                }
+
                 var scheme = new Scheme
                 {
                     UserId = CurrentUserId,
@@ -97,9 +112,9 @@ namespace QuantumIdleWEB.Controllers.API
                     PlayMode = request.PlayMode,
                     OddsType = request.OddsType,
                     PositionLst = JsonSerializer.Serialize(request.PositionLst ?? new List<int>()),
-                    OddsConfig = request.OddsConfig != null ? JsonSerializer.Serialize(request.OddsConfig) : null,
+                    OddsConfig = oddsConfigJson,
                     DrawRule = request.DrawRule,
-                    DrawRuleConfig = request.DrawRuleConfig != null ? JsonSerializer.Serialize(request.DrawRuleConfig) : null,
+                    DrawRuleConfig = drawRuleConfigJson,
                     EnableStopProfitLoss = request.EnableStopProfitLoss,
                     StopProfitAmount = request.StopProfitAmount,
                     StopLossAmount = request.StopLossAmount,
@@ -159,13 +174,21 @@ namespace QuantumIdleWEB.Controllers.API
                     scheme.PositionLst = JsonSerializer.Serialize(request.PositionLst);
 
                 if (request.OddsConfig != null)
-                    scheme.OddsConfig = JsonSerializer.Serialize(request.OddsConfig);
+                {
+                    var oddsConfigJson = JsonSerializer.Serialize(request.OddsConfig);
+                    _logger.LogInformation("更新 OddsConfig: {OddsConfig}", oddsConfigJson);
+                    scheme.OddsConfig = oddsConfigJson;
+                }
 
                 if (request.DrawRule.HasValue)
                     scheme.DrawRule = request.DrawRule.Value;
 
                 if (request.DrawRuleConfig != null)
-                    scheme.DrawRuleConfig = JsonSerializer.Serialize(request.DrawRuleConfig);
+                {
+                    var drawRuleConfigJson = JsonSerializer.Serialize(request.DrawRuleConfig);
+                    _logger.LogInformation("更新 DrawRuleConfig: {DrawRuleConfig}", drawRuleConfigJson);
+                    scheme.DrawRuleConfig = drawRuleConfigJson;
+                }
 
                 if (request.EnableStopProfitLoss.HasValue)
                     scheme.EnableStopProfitLoss = request.EnableStopProfitLoss.Value;

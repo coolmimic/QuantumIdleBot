@@ -596,17 +596,31 @@
                 
                 // 倍率配置
                 if (s.oddsConfig) {
-                    const config = JSON.parse(s.oddsConfig);
-                    // 兼容大小写：后端可能返回 Sequence 或 sequence
-                    const seq = config.Sequence || config.sequence;
-                    if (seq) {
-                        oddsSequence = seq;
-                        renderSequence();
-                    }
-                    // 兼容大小写：ProgressMode 或 progressMode
-                    const progMode = config.ProgressMode ?? config.progressMode;
-                    if (progMode !== undefined) {
-                        document.getElementById('progressMode').value = progMode;
+                    try {
+                        let config = s.oddsConfig;
+                        // 如果是字符串，先解析
+                        if (typeof config === 'string') {
+                            config = JSON.parse(config);
+                        }
+                        console.log('加载的 oddsConfig:', config);
+                        
+                        // 兼容多种字段名格式
+                        const seq = config.Sequence || config.sequence || config.Odds || config.odds;
+                        if (seq && Array.isArray(seq) && seq.length > 0) {
+                            oddsSequence = seq;
+                            console.log('加载的 oddsSequence:', oddsSequence);
+                            renderSequence();
+                        } else {
+                            console.warn('oddsConfig 中没有找到有效的序列:', config);
+                        }
+                        
+                        // 兼容大小写：ProgressMode 或 progressMode
+                        const progMode = config.ProgressMode ?? config.progressMode;
+                        if (progMode !== undefined) {
+                            document.getElementById('progressMode').value = progMode;
+                        }
+                    } catch (parseError) {
+                        console.error('解析 oddsConfig 失败:', parseError, s.oddsConfig);
                     }
                 }
                 
