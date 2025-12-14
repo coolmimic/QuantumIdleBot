@@ -1,18 +1,706 @@
 @{
-    ViewData["Title"] = "首页";
+    ViewData["Title"] = "量子挂机 - 智能自动化投注系统";
+    Layout = null;
 }
 
-<div class="page-container">
-    <div class="header">
-        <h1>量子挂机</h1>
-        <p class="subtitle">移动版</p>
-    </div>
-    
-    <div class="content">
-        <div class="login-prompt">
-            <p>请先登录以使用系统</p>
-            <a href="/Home/Login" class="btn btn-primary">立即登录</a>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"]</title>
+    <meta name="description" content="量子挂机 - 专业的自动化挂机投注系统，支持多方案、多群组、全自动结算" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: #1a1a25;
+            --accent: #6366f1;
+            --accent-light: #818cf8;
+            --accent-glow: rgba(99, 102, 241, 0.4);
+            --success: #10b981;
+            --text-primary: #ffffff;
+            --text-secondary: #a1a1aa;
+            --text-muted: #71717a;
+            --border: rgba(255, 255, 255, 0.08);
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+        
+        /* Navigation */
+        .nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding: 16px 24px;
+            background: rgba(10, 10, 15, 0.8);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+        }
+        .nav-inner {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .logo {
+            font-size: 24px;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--accent-light), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .nav-links {
+            display: flex;
+            gap: 32px;
+        }
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+        .nav-links a:hover {
+            color: var(--text-primary);
+        }
+        .nav-btn {
+            background: var(--accent);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .nav-btn:hover {
+            background: var(--accent-light);
+            box-shadow: 0 0 30px var(--accent-glow);
+        }
+        
+        /* Hero Section */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            padding: 120px 24px 80px;
+            overflow: hidden;
+        }
+        .hero-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(ellipse at 50% 0%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 50%, rgba(16, 185, 129, 0.1) 0%, transparent 40%),
+                radial-gradient(ellipse at 20% 80%, rgba(99, 102, 241, 0.1) 0%, transparent 40%);
+        }
+        .hero-grid {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: 
+                linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+            background-size: 60px 60px;
+            mask-image: radial-gradient(ellipse at center, black 0%, transparent 70%);
+        }
+        .hero-content {
+            position: relative;
+            text-align: center;
+            max-width: 900px;
+        }
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(99, 102, 241, 0.1);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            padding: 8px 16px;
+            border-radius: 50px;
+            font-size: 13px;
+            color: var(--accent-light);
+            margin-bottom: 24px;
+        }
+        .hero-badge::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: var(--success);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .hero h1 {
+            font-size: clamp(40px, 8vw, 72px);
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 24px;
+            background: linear-gradient(180deg, #fff 0%, #a1a1aa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .hero h1 span {
+            background: linear-gradient(135deg, var(--accent-light), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .hero p {
+            font-size: 18px;
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin: 0 auto 40px;
+            line-height: 1.7;
+        }
+        .hero-buttons {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent), var(--accent-light));
+            color: white;
+            padding: 16px 32px;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 16px;
+            transition: all 0.3s;
+            box-shadow: 0 4px 20px var(--accent-glow);
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 40px var(--accent-glow);
+        }
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 16px 32px;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+        
+        /* Features Section */
+        .features {
+            padding: 100px 24px;
+            background: var(--bg-secondary);
+        }
+        .section-inner {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .section-header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+        .section-header h2 {
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+        .section-header p {
+            color: var(--text-secondary);
+            font-size: 18px;
+        }
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+        }
+        .feature-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 32px;
+            transition: all 0.3s;
+        }
+        .feature-card:hover {
+            border-color: var(--accent);
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+        .feature-icon {
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(99, 102, 241, 0.1));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            margin-bottom: 20px;
+        }
+        .feature-card h3 {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+        .feature-card p {
+            color: var(--text-secondary);
+            font-size: 15px;
+            line-height: 1.6;
+        }
+        
+        /* Pricing Section */
+        .pricing {
+            padding: 100px 24px;
+        }
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .pricing-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 40px 32px;
+            text-align: center;
+            transition: all 0.3s;
+            position: relative;
+        }
+        .pricing-card.popular {
+            border-color: var(--accent);
+            box-shadow: 0 0 60px var(--accent-glow);
+        }
+        .pricing-card.popular::before {
+            content: '推荐';
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--accent);
+            color: white;
+            padding: 6px 20px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .pricing-card h3 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .pricing-card .desc {
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-bottom: 24px;
+        }
+        .pricing-card .price {
+            font-size: 48px;
+            font-weight: 800;
+            margin-bottom: 8px;
+        }
+        .pricing-card .price span {
+            font-size: 18px;
+            font-weight: 400;
+            color: var(--text-muted);
+        }
+        .pricing-card .period {
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-bottom: 32px;
+        }
+        .pricing-features {
+            text-align: left;
+            margin-bottom: 32px;
+        }
+        .pricing-features li {
+            list-style: none;
+            padding: 10px 0;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 15px;
+        }
+        .pricing-features li::before {
+            content: '✓';
+            color: var(--success);
+            font-weight: bold;
+        }
+        .pricing-btn {
+            display: block;
+            width: 100%;
+            padding: 16px;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+        .pricing-card .pricing-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+        }
+        .pricing-card.popular .pricing-btn {
+            background: var(--accent);
+            border: none;
+            color: white;
+        }
+        .pricing-card .pricing-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .pricing-card.popular .pricing-btn:hover {
+            background: var(--accent-light);
+        }
+        
+        /* FAQ Section */
+        .faq {
+            padding: 100px 24px;
+            background: var(--bg-secondary);
+        }
+        .faq-list {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .faq-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+        .faq-question {
+            padding: 20px 24px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            font-size: 16px;
+        }
+        .faq-question::after {
+            content: '+';
+            font-size: 24px;
+            color: var(--text-muted);
+            transition: transform 0.3s;
+        }
+        .faq-item.active .faq-question::after {
+            transform: rotate(45deg);
+        }
+        .faq-answer {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s;
+        }
+        .faq-item.active .faq-answer {
+            max-height: 200px;
+        }
+        .faq-answer p {
+            padding: 0 24px 20px;
+            color: var(--text-secondary);
+            line-height: 1.7;
+        }
+        
+        /* Footer */
+        .footer {
+            padding: 60px 24px 40px;
+            border-top: 1px solid var(--border);
+            text-align: center;
+        }
+        .footer-logo {
+            font-size: 28px;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--accent-light), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 16px;
+        }
+        .footer p {
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-bottom: 24px;
+        }
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+        .footer-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 14px;
+        }
+        .footer-links a:hover {
+            color: var(--text-primary);
+        }
+        .footer-bottom {
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+        
+        /* Mobile Responsive */
+        @@media (max-width: 768px) {
+            .nav-links {
+                display: none;
+            }
+            .hero h1 {
+                font-size: 36px;
+            }
+            .hero p {
+                font-size: 16px;
+            }
+            .hero-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+            .btn-primary, .btn-secondary {
+                width: 100%;
+                max-width: 300px;
+                text-align: center;
+            }
+            .section-header h2 {
+                font-size: 28px;
+            }
+            .pricing-card .price {
+                font-size: 36px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="nav">
+        <div class="nav-inner">
+            <div class="logo">⚡ 量子挂机</div>
+            <div class="nav-links">
+                <a href="#features">功能</a>
+                <a href="#pricing">价格</a>
+                <a href="#faq">常见问题</a>
+            </div>
+            <a href="/Home/Login" class="nav-btn">立即登录</a>
         </div>
-    </div>
-</div>
-
+    </nav>
+    
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-bg"></div>
+        <div class="hero-grid"></div>
+        <div class="hero-content">
+            <div class="hero-badge">🚀 全新升级 v2.0</div>
+            <h1>让挂机变得<span>简单高效</span></h1>
+            <p>专业的 Telegram 自动化挂机系统，支持多方案策略、智能结算、止盈止损。一次配置，全天候自动运行。</p>
+            <div class="hero-buttons">
+                <a href="/Home/Register" class="btn-primary">免费注册</a>
+                <a href="https://t.me/liangziweb_bot" target="_blank" class="btn-secondary">📱 TG 机器人</a>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Features Section -->
+    <section class="features" id="features">
+        <div class="section-inner">
+            <div class="section-header">
+                <h2>强大功能</h2>
+                <p>一站式自动化挂机解决方案</p>
+            </div>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🤖</div>
+                    <h3>全自动运行</h3>
+                    <p>7x24 小时不间断监控 Telegram 群组，自动识别开奖信息，智能下注结算。</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📋</div>
+                    <h3>多方案支持</h3>
+                    <p>支持同时运行多个策略方案，每个方案可绑定不同群组，独立配置规则。</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <h3>灵活倍率</h3>
+                    <p>自定义倍率序列，支持挂了加倍/中了加倍两种模式，适应不同策略需求。</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🎯</div>
+                    <h3>智能出号</h3>
+                    <p>多种出号规则可选：固定号码、趋势追踪、龙虎判断，灵活应对各种玩法。</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🛡️</div>
+                    <h3>止盈止损</h3>
+                    <p>设置盈利目标和亏损上限，达到阈值自动停止，有效控制风险。</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📱</div>
+                    <h3>多端同步</h3>
+                    <p>网页端配置，Telegram 机器人控制，注单实时推送，随时掌握状态。</p>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Pricing Section -->
+    <section class="pricing" id="pricing">
+        <div class="section-inner">
+            <div class="section-header">
+                <h2>简单透明的定价</h2>
+                <p>选择适合您的方案</p>
+            </div>
+            <div class="pricing-grid">
+                <div class="pricing-card">
+                    <h3>月卡</h3>
+                    <p class="desc">适合新用户体验</p>
+                    <div class="price">¥99<span>/月</span></div>
+                    <p class="period">30 天有效期</p>
+                    <ul class="pricing-features">
+                        <li>无限方案数量</li>
+                        <li>全部出号规则</li>
+                        <li>实时注单推送</li>
+                        <li>基础技术支持</li>
+                    </ul>
+                    <a href="/Home/Register" class="pricing-btn">开始使用</a>
+                </div>
+                <div class="pricing-card popular">
+                    <h3>季卡</h3>
+                    <p class="desc">最受欢迎的选择</p>
+                    <div class="price">¥249<span>/季</span></div>
+                    <p class="period">90 天有效期 · 省 ¥48</p>
+                    <ul class="pricing-features">
+                        <li>无限方案数量</li>
+                        <li>全部出号规则</li>
+                        <li>实时注单推送</li>
+                        <li>优先技术支持</li>
+                        <li>新功能抢先体验</li>
+                    </ul>
+                    <a href="/Home/Register" class="pricing-btn">立即购买</a>
+                </div>
+                <div class="pricing-card">
+                    <h3>年卡</h3>
+                    <p class="desc">长期用户首选</p>
+                    <div class="price">¥799<span>/年</span></div>
+                    <p class="period">365 天有效期 · 省 ¥389</p>
+                    <ul class="pricing-features">
+                        <li>无限方案数量</li>
+                        <li>全部出号规则</li>
+                        <li>实时注单推送</li>
+                        <li>专属 VIP 支持</li>
+                        <li>定制功能开发</li>
+                    </ul>
+                    <a href="/Home/Register" class="pricing-btn">开始使用</a>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- FAQ Section -->
+    <section class="faq" id="faq">
+        <div class="section-inner">
+            <div class="section-header">
+                <h2>常见问题</h2>
+                <p>快速了解量子挂机</p>
+            </div>
+            <div class="faq-list">
+                <div class="faq-item active">
+                    <div class="faq-question">如何开始使用量子挂机？</div>
+                    <div class="faq-answer">
+                        <p>注册账号后，先登录您的 Telegram 账号，然后创建方案并绑定目标群组，配置好出号规则和倍率序列，点击开始挂机即可。系统会自动监控群内消息并执行策略。</p>
+                    </div>
+                </div>
+                <div class="faq-item">
+                    <div class="faq-question">支持哪些游戏类型？</div>
+                    <div class="faq-answer">
+                        <p>目前支持扫雷、哈希彩等主流游戏类型，后续会持续增加更多玩法支持。</p>
+                    </div>
+                </div>
+                <div class="faq-item">
+                    <div class="faq-question">模拟模式和真实模式有什么区别？</div>
+                    <div class="faq-answer">
+                        <p>模拟模式只记录注单但不实际发送消息，适合测试策略效果；真实模式会真正在群内发送下注消息。建议新策略先用模拟模式验证。</p>
+                    </div>
+                </div>
+                <div class="faq-item">
+                    <div class="faq-question">如何购买或续费？</div>
+                    <div class="faq-answer">
+                        <p>您可以通过我们的 Telegram 机器人 @liangziweb_bot 获取卡密，或联系客服购买。获得卡密后在设置页面激活即可。</p>
+                    </div>
+                </div>
+                <div class="faq-item">
+                    <div class="faq-question">数据安全吗？</div>
+                    <div class="faq-answer">
+                        <p>您的 Telegram 会话数据加密存储在服务器，只有您本人可以使用。我们不会查看或使用您的账号进行任何操作。</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-logo">⚡ 量子挂机</div>
+        <p>专业的自动化挂机系统</p>
+        <div class="footer-links">
+            <a href="/Home/Login">登录</a>
+            <a href="/Home/Register">注册</a>
+            <a href="https://t.me/liangziweb_bot" target="_blank">TG 机器人</a>
+        </div>
+        <div class="footer-bottom">
+            © 2024 量子挂机 · All rights reserved
+        </div>
+    </footer>
+    
+    <script>
+        // FAQ Toggle
+        document.querySelectorAll('.faq-question').forEach(question => {
+            question.addEventListener('click', () => {
+                const item = question.parentElement;
+                item.classList.toggle('active');
+            });
+        });
+        
+        // Smooth scroll for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function(e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        });
+    </script>
+</body>
+</html>

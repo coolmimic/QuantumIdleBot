@@ -43,6 +43,11 @@ namespace QuantumIdleModels.Entities
         public long TelegramId { get; set; }
 
         /// <summary>
+        /// 服务机器人会话 ID (用于推送通知)
+        /// </summary>
+        public long TelegramChatId { get; set; }
+
+        /// <summary>
         /// 账号创建时间
         /// </summary>
         public DateTime CreateTime { get; set; } = DateTime.Now;
