@@ -170,14 +170,14 @@ namespace QuantumIdleWEB.Services
             // 根据游戏类型判断
             switch (gameType)
             {
-                case 0: // 扫雷 - 结果通常是单个数字
-                    return JudgeBigSmallOddEven(bet, resultNum, 5); // 5作为界限
+                case 0: // 扫雷 - 1-6, 规则: 1,2,3小 / 4,5,6大
+                    return JudgeBigSmallOddEven(bet, resultNum, 4); // >=4 算大
                     
-                case 4: // 哈希彩 - 结果是5个数字，取和
-                    return JudgeBigSmallOddEven(bet, resultNum, 22); // 22作为大小界限
+                case 4: // 哈希彩 - 结果是5个数字，取和，23及以上算大
+                    return JudgeBigSmallOddEven(bet, resultNum, 23); // >=23 算大
                     
                 default:
-                    return JudgeBigSmallOddEven(bet, resultNum, 5);
+                    return JudgeBigSmallOddEven(bet, resultNum, 4);
             }
         }
 
