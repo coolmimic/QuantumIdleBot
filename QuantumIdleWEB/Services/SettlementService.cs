@@ -3,6 +3,7 @@ using QuantumIdleModels.Entities;
 using QuantumIdleWEB.Data;
 using QuantumIdleWEB.Strategies.OddsRules;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace QuantumIdleWEB.Services
 {
@@ -214,8 +215,10 @@ namespace QuantumIdleWEB.Services
             {
                 try
                 {
-                    var config = JsonSerializer.Deserialize<LinearOddsConfig>(scheme.OddsConfig);
-                    if (config != null)
+                    // 使用不区分大小写的反序列化，避免前端 'sequence' 无法匹配到 'Sequence'
+                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    var config = JsonSerializer.Deserialize<LinearOddsConfig>(scheme.OddsConfig, options);
+                    if (config != null && config.Sequence != null && config.Sequence.Count > 0)
                     {
                         // ProgressMode: 0=挂了加倍(输后递增), 1=中了加倍(赢后递增)
                         bool shouldProgress = config.ProgressMode == 1 ? isWin : !isWin;
@@ -235,7 +238,10 @@ namespace QuantumIdleWEB.Services
                         scheme.OddsConfig = JsonSerializer.Serialize(config);
                     }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "更新方案倍率状态失败: {OddsConfig}", scheme.OddsConfig);
+                }
             }
         }
 

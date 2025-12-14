@@ -7,10 +7,15 @@ namespace QuantumIdleWEB.Strategies.OddsRules
     /// </summary>
     public class LinearOddsRule : IOddsRule
     {
+        private static readonly JsonSerializerOptions _jsonOptions = new() 
+        { 
+            PropertyNameCaseInsensitive = true 
+        };
+
         public int GetNextMultiplier(OddsContext context)
         {
             var config = GetConfig(context);
-            if (config == null || config.Sequence.Count == 0) return 1;
+            if (config == null || config.Sequence == null || config.Sequence.Count == 0) return 1;
             
             var index = config.CurrentIndex;
             if (index >= config.Sequence.Count) index = 0;
@@ -21,7 +26,7 @@ namespace QuantumIdleWEB.Strategies.OddsRules
         public void UpdateState(OddsContext context, bool isWin)
         {
             var config = GetConfig(context);
-            if (config == null) return;
+            if (config == null || config.Sequence == null || config.Sequence.Count == 0) return;
             
             // ProgressMode: 0=挂了加倍(输后递增), 1=中了加倍(赢后递增)
             bool shouldProgress = config.ProgressMode == 1 ? isWin : !isWin;
@@ -47,7 +52,7 @@ namespace QuantumIdleWEB.Strategies.OddsRules
             try
             {
                 return JsonSerializer.Deserialize<LinearOddsConfig>(
-                    JsonSerializer.Serialize(context.OddsConfig));
+                    JsonSerializer.Serialize(context.OddsConfig), _jsonOptions);
             }
             catch
             {
@@ -58,7 +63,8 @@ namespace QuantumIdleWEB.Strategies.OddsRules
 
     public class LinearOddsConfig
     {
-        public List<int> Sequence { get; set; } = new() { 1, 2, 4, 8, 17 };
+        // 不设置默认值，避免覆盖用户配置
+        public List<int> Sequence { get; set; } = new();
         public int CurrentIndex { get; set; }
         
         /// <summary>
