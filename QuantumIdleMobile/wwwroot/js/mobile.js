@@ -1,9 +1,18 @@
 // 移动版通用 JavaScript
 
 // API 基础配置
+// 自动修复：如果本地存储了旧的 5000 端口地址，强制清除，使用相对路径
+let savedUrl = localStorage.getItem('apiBaseUrl');
+if (savedUrl && savedUrl.includes(':5000')) {
+    console.log('Detected legacy API URL, clearing...');
+    localStorage.removeItem('apiBaseUrl');
+    savedUrl = null;
+}
+
+// API 基础配置
 const API_CONFIG = {
     // 自动使用当前域名和协议，不再硬编码端口
-    baseUrl: localStorage.getItem('apiBaseUrl') || '/api',
+    baseUrl: savedUrl || '/api',
     getToken: () => localStorage.getItem('token')
 };
 
