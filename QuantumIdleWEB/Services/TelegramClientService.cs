@@ -566,11 +566,7 @@ namespace QuantumIdleWEB.Services
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, $"处理消息时出错: 群组 {groupId}");
-                    // 错误日志记录到所有相关用户
-                    foreach (var userGroup in userSchemes)
-                    {
-                        gameService.AddLog($"[错误] 处理消息失败: {ex.Message}", userGroup.Key);
-                    }
+                    // 注意：userSchemes 在 catch 块中不可用（作用域限制）
                 }
             }
         }
