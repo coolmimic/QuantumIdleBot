@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using QuantumIdleModels.Entities;
 using QuantumIdleWEB.Data;
 using QuantumIdleWEB.Services;
+using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using Telegram.Bot;
@@ -25,6 +26,9 @@ namespace QuantumIdleWeb.Controllers.Api
         private readonly TelegramClientService _telegramClientService;
         private readonly ILogger<ServiceBotController> _logger;
         private readonly ITelegramBotClient? _serviceBot;
+
+        // 用户登录状态：chatId -> (userId, state, phoneNumber)
+        private static readonly ConcurrentDictionary<long, TgLoginState> _loginStates = new();
 
         public ServiceBotController(
             IConfiguration config,
@@ -53,14 +57,12 @@ namespace QuantumIdleWeb.Controllers.Api
 
             try
             {
-                // 处理回调查询（按钮点击）
                 if (update.CallbackQuery != null)
                 {
                     await HandleCallback(update.CallbackQuery);
                     return Ok();
                 }
 
-                // 处理消息
                 if (update.Message?.Text != null)
                 {
                     await HandleMessage(update.Message);
@@ -98,25 +100,30 @@ namespace QuantumIdleWeb.Controllers.Api
 
             using var scope = _serviceProvider.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
-            // 检查是否已绑定
             var user = await dbContext.Users.FirstOrDefaultAsync(u => u.TelegramChatId == chatId);
 
-            // 处理底部键盘按钮
+            // 检查是否在 TG 登录流程中
+            if (_loginStates.TryGetValue(chatId, out var loginState) && user != null)
+            {
+                await HandleTgLoginInput(chatId, text, loginState, user);
+                return;
+            }
+
+            // 常规消息处理
             switch (text)
             {
                 case "/start":
-                    await ShowWelcome(chatId, user);
+                    await ShowWelcomeWithKeyboard(chatId, user);
                     break;
                 case "📊 挂机状态":
-                    if (user == null) { await PromptBind(chatId); return; }
+                    if (user == null) { await PromptBindWithKeyboard(chatId); return; }
                     await ShowStatus(chatId, user, dbContext);
                     break;
                 case "💳 购买卡密":
                     await ShowBuyMenu(chatId);
                     break;
                 case "⚙️ 设置":
-                    if (user == null) { await PromptBind(chatId); return; }
+                    if (user == null) { await PromptBindWithKeyboard(chatId); return; }
                     await ShowSettings(chatId, user);
                     break;
                 case "🆘 联系客服":
@@ -132,12 +139,12 @@ namespace QuantumIdleWeb.Controllers.Api
                         }
                         else
                         {
-                            await SendMessage(chatId, "⚠️ 格式: /bind 用户名 密码");
+                            await SendMessageWithReplyKeyboard(chatId, "⚠️ 格式: /bind 用户名 密码");
                         }
                     }
                     else if (user == null)
                     {
-                        await PromptBind(chatId);
+                        await PromptBindWithKeyboard(chatId);
                     }
                     else
                     {
@@ -160,7 +167,7 @@ namespace QuantumIdleWeb.Controllers.Api
 
             await _serviceBot.AnswerCallbackQuery(callback.Id);
 
-            // 购买相关回调不需要绑定
+            // 购买回调不需要绑定
             if (data.StartsWith("buy_"))
             {
                 await HandleBuyCallback(chatId, data, dbContext);
@@ -169,7 +176,7 @@ namespace QuantumIdleWeb.Controllers.Api
 
             if (user == null)
             {
-                await PromptBind(chatId);
+                await PromptBindWithKeyboard(chatId);
                 return;
             }
 
@@ -177,6 +184,9 @@ namespace QuantumIdleWeb.Controllers.Api
             {
                 case "status":
                     await ShowStatus(chatId, user, dbContext);
+                    break;
+                case "connect_tg":
+                    await StartTgLogin(chatId, user);
                     break;
                 case "start_bot":
                     await StartBot(chatId, user, dbContext);
@@ -186,12 +196,12 @@ namespace QuantumIdleWeb.Controllers.Api
                     break;
                 case "mode_sim":
                     _gameService.IsSimulation = true;
-                    await SendMessage(chatId, "✅ 已切换到 *模拟模式*", ParseMode.Markdown);
+                    await SendMessageWithReplyKeyboard(chatId, "✅ 已切换到 *模拟模式*", ParseMode.Markdown);
                     await ShowMainMenu(chatId, user, dbContext);
                     break;
                 case "mode_real":
                     _gameService.IsSimulation = false;
-                    await SendMessage(chatId, "✅ 已切换到 *真实模式*", ParseMode.Markdown);
+                    await SendMessageWithReplyKeyboard(chatId, "✅ 已切换到 *真实模式*", ParseMode.Markdown);
                     await ShowMainMenu(chatId, user, dbContext);
                     break;
                 case "orders":
@@ -211,20 +221,164 @@ namespace QuantumIdleWeb.Controllers.Api
                     await ShowSettings(chatId, user);
                     break;
                 case "menu":
+                    _loginStates.TryRemove(chatId, out _); // 清除登录状态
                     await ShowMainMenu(chatId, user, dbContext);
                     break;
                 case "unbind":
                     user.TelegramChatId = 0;
                     await dbContext.SaveChangesAsync();
-                    await SendMessage(chatId, "✅ 已解绑账号\n\n发送 /start 重新开始");
+                    await SendMessageWithReplyKeyboard(chatId, "✅ 已解绑账号\n\n发送 /start 重新开始");
                     break;
             }
         }
 
+        #region TG 登录流程
+
+        private async Task StartTgLogin(long chatId, AppUser user)
+        {
+            // 已连接则提示
+            if (_telegramClientService.IsConnected(user.Id))
+            {
+                await SendMessageWithReplyKeyboard(chatId, "✅ Telegram 已连接，无需重新登录");
+                return;
+            }
+
+            // 设置状态：等待手机号
+            _loginStates[chatId] = new TgLoginState
+            {
+                UserId = user.Id,
+                UserName = user.UserName ?? "",
+                State = LoginStep.WaitingPhoneNumber
+            };
+
+            await SendMessageWithReplyKeyboard(chatId,
+                "📱 *登录 Telegram*\n\n请输入您的手机号（带国际区号）\n\n例如: `+8613812345678`",
+                ParseMode.Markdown);
+        }
+
+        private async Task HandleTgLoginInput(long chatId, string text, TgLoginState state, AppUser user)
+        {
+            switch (state.State)
+            {
+                case LoginStep.WaitingPhoneNumber:
+                    await ProcessPhoneNumber(chatId, text, state, user);
+                    break;
+                case LoginStep.WaitingVerificationCode:
+                    await ProcessVerificationCode(chatId, text, state, user);
+                    break;
+                case LoginStep.WaitingPassword:
+                    await ProcessPassword(chatId, text, state, user);
+                    break;
+            }
+        }
+
+        private async Task ProcessPhoneNumber(long chatId, string phone, TgLoginState state, AppUser user)
+        {
+            if (!phone.StartsWith("+") || phone.Length < 10)
+            {
+                await SendMessageWithReplyKeyboard(chatId, "⚠️ 格式错误，请输入正确的手机号\n例如: `+8613812345678`", ParseMode.Markdown);
+                return;
+            }
+
+            await SendMessageWithReplyKeyboard(chatId, "⏳ 正在发送验证码...");
+
+            var result = await _telegramClientService.InitializeClientAsync(state.UserId, phone, state.UserName);
+
+            if (result.Success)
+            {
+                _loginStates.TryRemove(chatId, out _);
+                await SendMessageWithReplyKeyboard(chatId, "✅ *Telegram 登录成功！*", ParseMode.Markdown);
+                
+                using var scope = _serviceProvider.CreateScope();
+                var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                await ShowMainMenu(chatId, user, dbContext);
+            }
+            else if (result.RequiresAuth)
+            {
+                state.PhoneNumber = phone;
+                
+                if (result.AuthType == "password")
+                {
+                    state.State = LoginStep.WaitingPassword;
+                    await SendMessageWithReplyKeyboard(chatId, "🔐 请输入您的 Telegram 两步验证密码:");
+                }
+                else
+                {
+                    state.State = LoginStep.WaitingVerificationCode;
+                    await SendMessageWithReplyKeyboard(chatId, "📨 验证码已发送到您的 Telegram 应用\n\n请输入收到的验证码:");
+                }
+            }
+            else
+            {
+                _loginStates.TryRemove(chatId, out _);
+                await SendMessageWithReplyKeyboard(chatId, $"❌ 登录失败: {result.Message}");
+            }
+        }
+
+        private async Task ProcessVerificationCode(long chatId, string code, TgLoginState state, AppUser user)
+        {
+            await SendMessageWithReplyKeyboard(chatId, "⏳ 验证中...");
+
+            var result = await _telegramClientService.SubmitAuthAsync(state.UserId, code);
+
+            if (result.Success)
+            {
+                _loginStates.TryRemove(chatId, out _);
+                await SendMessageWithReplyKeyboard(chatId, "✅ *Telegram 登录成功！*", ParseMode.Markdown);
+                
+                using var scope = _serviceProvider.CreateScope();
+                var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                await ShowMainMenu(chatId, user, dbContext);
+            }
+            else if (result.RequiresAuth && result.AuthType == "password")
+            {
+                state.State = LoginStep.WaitingPassword;
+                await SendMessageWithReplyKeyboard(chatId, "🔐 需要输入两步验证密码:");
+            }
+            else if (result.RequiresAuth)
+            {
+                await SendMessageWithReplyKeyboard(chatId, $"⚠️ {result.Message}\n请重新输入验证码:");
+            }
+            else
+            {
+                _loginStates.TryRemove(chatId, out _);
+                await SendMessageWithReplyKeyboard(chatId, $"❌ 验证失败: {result.Message}");
+            }
+        }
+
+        private async Task ProcessPassword(long chatId, string password, TgLoginState state, AppUser user)
+        {
+            await SendMessageWithReplyKeyboard(chatId, "⏳ 验证密码...");
+
+            var result = await _telegramClientService.SubmitAuthAsync(state.UserId, password);
+
+            if (result.Success)
+            {
+                _loginStates.TryRemove(chatId, out _);
+                await SendMessageWithReplyKeyboard(chatId, "✅ *Telegram 登录成功！*", ParseMode.Markdown);
+                
+                using var scope = _serviceProvider.CreateScope();
+                var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                await ShowMainMenu(chatId, user, dbContext);
+            }
+            else if (result.RequiresAuth)
+            {
+                await SendMessageWithReplyKeyboard(chatId, $"⚠️ {result.Message}\n请重新输入密码:");
+            }
+            else
+            {
+                _loginStates.TryRemove(chatId, out _);
+                await SendMessageWithReplyKeyboard(chatId, $"❌ 验证失败: {result.Message}");
+            }
+        }
+
+        #endregion
+
+        #region 购买流程
+
         private async Task HandleBuyCallback(long chatId, string data, ApplicationDbContext dbContext)
         {
-            int days = 0;
-            int amount = 0;
+            int days = 0, amount = 0;
 
             switch (data)
             {
@@ -242,17 +396,12 @@ namespace QuantumIdleWeb.Controllers.Api
         {
             string address = _config["Tron:WalletAddress"] ?? "";
 
-            // 1. 把之前的未支付订单标记过期
             var oldOrders = await dbContext.PaymentOrders
                 .Where(o => o.TelegramId == chatId && o.Status == 0)
                 .ToListAsync();
 
-            foreach (var o in oldOrders)
-            {
-                o.Status = -1;
-            }
+            foreach (var o in oldOrders) o.Status = -1;
 
-            // 2. 生成随机金额
             var rnd = new Random();
             decimal finalAmount = 0;
             bool foundUnique = false;
@@ -264,9 +413,7 @@ namespace QuantumIdleWeb.Controllers.Api
                 decimal tempAmount = baseAmount - discount;
 
                 bool isOccupied = await dbContext.PaymentOrders.AnyAsync(o =>
-                    o.Status == 0 &&
-                    o.RealAmount == tempAmount &&
-                    o.ExpireTime > DateTime.Now);
+                    o.Status == 0 && o.RealAmount == tempAmount && o.ExpireTime > DateTime.Now);
 
                 if (!isOccupied)
                 {
@@ -278,11 +425,10 @@ namespace QuantumIdleWeb.Controllers.Api
 
             if (!foundUnique)
             {
-                await SendMessage(chatId, "⚠️ 系统繁忙，请稍后再试。");
+                await SendMessageWithReplyKeyboard(chatId, "⚠️ 系统繁忙，请稍后再试。");
                 return;
             }
 
-            // 3. 创建订单
             var newOrder = new PaymentOrder
             {
                 TelegramId = chatId,
@@ -309,10 +455,14 @@ namespace QuantumIdleWeb.Controllers.Api
 ⚠️ *请在 20 分钟内完成支付*
 ✅ *转账后自动发货卡密*";
 
-            await SendMessage(chatId, text, ParseMode.Markdown);
+            await SendMessageWithReplyKeyboard(chatId, text, ParseMode.Markdown);
         }
 
-        private async Task ShowWelcome(long chatId, AppUser? user)
+        #endregion
+
+        #region 菜单和状态显示
+
+        private async Task ShowWelcomeWithKeyboard(long chatId, AppUser? user)
         {
             if (user != null)
             {
@@ -332,10 +482,10 @@ namespace QuantumIdleWeb.Controllers.Api
 ━━━━━━━━━━━━━━
 🌐 官网注册: liangzi.love";
 
-            await SendMessage(chatId, text, ParseMode.Markdown, null, GetMainReplyKeyboard());
+            await SendMessageWithReplyKeyboard(chatId, text, ParseMode.Markdown);
         }
 
-        private async Task PromptBind(long chatId)
+        private async Task PromptBindWithKeyboard(long chatId)
         {
             var text = @"⚠️ *请先绑定账号*
 
@@ -344,7 +494,7 @@ namespace QuantumIdleWeb.Controllers.Api
 还没有账号？前往官网注册：
 🌐 liangzi.love";
 
-            await SendMessage(chatId, text, ParseMode.Markdown, null, GetMainReplyKeyboard());
+            await SendMessageWithReplyKeyboard(chatId, text, ParseMode.Markdown);
         }
 
         private async Task ShowMainMenu(long chatId, AppUser user, ApplicationDbContext dbContext)
@@ -366,26 +516,32 @@ namespace QuantumIdleWeb.Controllers.Api
 {runningIcon} 挂机: {status}
 {modeIcon} 模式: {mode}模式";
 
-            var keyboard = new InlineKeyboardMarkup(new[]
+            var buttons = new List<InlineKeyboardButton[]>();
+
+            // 如果 TG 未连接，显示连接按钮
+            if (!isTgConnected)
             {
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData("📊 详情", "status"),
-                    InlineKeyboardButton.WithCallbackData(_gameService.IsRunning ? "⏹ 停止" : "▶️ 开始", _gameService.IsRunning ? "stop_bot" : "start_bot")
-                },
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData("🎮 模拟", "mode_sim"),
-                    InlineKeyboardButton.WithCallbackData("💰 真实", "mode_real")
-                },
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData("📝 注单", "orders"),
-                    InlineKeyboardButton.WithCallbackData("⚙️ 设置", "settings")
-                }
+                buttons.Add(new[] { InlineKeyboardButton.WithCallbackData("📱 连接 Telegram", "connect_tg") });
+            }
+
+            buttons.Add(new[]
+            {
+                InlineKeyboardButton.WithCallbackData("📊 详情", "status"),
+                InlineKeyboardButton.WithCallbackData(_gameService.IsRunning ? "⏹ 停止" : "▶️ 开始", _gameService.IsRunning ? "stop_bot" : "start_bot")
+            });
+            buttons.Add(new[]
+            {
+                InlineKeyboardButton.WithCallbackData("🎮 模拟", "mode_sim"),
+                InlineKeyboardButton.WithCallbackData("💰 真实", "mode_real")
+            });
+            buttons.Add(new[]
+            {
+                InlineKeyboardButton.WithCallbackData("📝 注单", "orders"),
+                InlineKeyboardButton.WithCallbackData("⚙️ 设置", "settings")
             });
 
-            await SendMessageWithInline(chatId, text, ParseMode.Markdown, keyboard);
+            var keyboard = new InlineKeyboardMarkup(buttons);
+            await SendMessageWithBothKeyboards(chatId, text, ParseMode.Markdown, keyboard);
         }
 
         private async Task ShowStatus(long chatId, AppUser user, ApplicationDbContext dbContext)
@@ -394,11 +550,7 @@ namespace QuantumIdleWeb.Controllers.Api
             var tgStatus = isTgConnected ? "🟢 已连接" : "🔴 未连接";
             var runningStatus = _gameService.IsRunning ? "🟢 运行中" : "🔴 已停止";
             var modeStatus = _gameService.IsSimulation ? "🎮 模拟模式" : "💰 真实模式";
-            var expireStatus = user.ExpireTime > DateTime.Now
-                ? $"✅ {user.ExpireTime:yyyy-MM-dd}"
-                : "❌ 已过期";
-
-            // 获取方案数量
+            var expireStatus = user.ExpireTime > DateTime.Now ? $"✅ {user.ExpireTime:yyyy-MM-dd}" : "❌ 已过期";
             var schemeCount = await dbContext.Schemes.CountAsync(s => s.UserId == user.Id && s.IsEnabled);
 
             var text = $@"📊 *详细状态*
@@ -420,31 +572,32 @@ namespace QuantumIdleWeb.Controllers.Api
                 new[] { InlineKeyboardButton.WithCallbackData("◀️ 返回", "menu") }
             });
 
-            await SendMessage(chatId, text, ParseMode.Markdown, keyboard);
+            await SendMessageWithInline(chatId, text, ParseMode.Markdown, keyboard);
         }
 
         private async Task StartBot(long chatId, AppUser user, ApplicationDbContext dbContext)
         {
-            // 检查账户是否过期
             if (user.ExpireTime < DateTime.Now)
             {
-                await SendMessage(chatId, "❌ 账户已过期，请先续费！");
+                await SendMessageWithReplyKeyboard(chatId, "❌ 账户已过期，请先续费！");
                 return;
             }
 
-            // 检查 TG 是否连接
-            var isTgConnected = _telegramClientService.IsConnected(user.Id);
-            if (!isTgConnected)
+            if (!_telegramClientService.IsConnected(user.Id))
             {
-                await SendMessage(chatId, "❌ Telegram 未连接！\n\n请先在网页端登录您的 Telegram 账号：\n🌐 liangzi.love");
+                var keyboard = new InlineKeyboardMarkup(new[]
+                {
+                    new[] { InlineKeyboardButton.WithCallbackData("📱 连接 Telegram", "connect_tg") },
+                    new[] { InlineKeyboardButton.WithCallbackData("◀️ 返回", "menu") }
+                });
+                await SendMessageWithInline(chatId, "❌ Telegram 未连接！请先连接:", ParseMode.Html, keyboard);
                 return;
             }
 
-            // 检查是否有启用的方案
             var hasScheme = await dbContext.Schemes.AnyAsync(s => s.UserId == user.Id && s.IsEnabled);
             if (!hasScheme)
             {
-                await SendMessage(chatId, "❌ 没有启用的方案！\n\n请先在网页端创建并启用方案。");
+                await SendMessageWithReplyKeyboard(chatId, "❌ 没有启用的方案！\n\n请先在网页端创建并启用方案。");
                 return;
             }
 
@@ -452,7 +605,7 @@ namespace QuantumIdleWeb.Controllers.Api
             var mode = _gameService.IsSimulation ? "模拟" : "真实";
             _gameService.AddLog($">>> [TG] 开始挂机 ({mode})", user.Id);
 
-            await SendMessage(chatId, $"✅ 挂机已启动！\n当前模式: {mode}模式");
+            await SendMessageWithReplyKeyboard(chatId, $"✅ 挂机已启动！\n当前模式: {mode}模式");
             await ShowMainMenu(chatId, user, dbContext);
         }
 
@@ -460,8 +613,7 @@ namespace QuantumIdleWeb.Controllers.Api
         {
             _gameService.IsRunning = false;
             _gameService.AddLog(">>> [TG] 挂机已停止", user.Id);
-
-            await SendMessage(chatId, "⏹ 挂机已停止");
+            await SendMessageWithReplyKeyboard(chatId, "⏹ 挂机已停止");
 
             using var scope = _serviceProvider.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -476,28 +628,16 @@ namespace QuantumIdleWeb.Controllers.Api
                 .Take(5)
                 .ToListAsync();
 
-            string text;
-            if (orders.Count == 0)
+            string text = orders.Count == 0 ? "📝 暂无注单记录" : "📝 *最近5条注单*\n\n";
+            foreach (var order in orders)
             {
-                text = "📝 暂无注单记录";
-            }
-            else
-            {
-                text = "📝 *最近5条注单*\n\n";
-                foreach (var order in orders)
-                {
-                    var status = order.Status == 1 ? (order.IsWin ? "✅" : "❌") : "⏳";
-                    var profit = order.Profit >= 0 ? $"+{order.Profit:F2}" : $"{order.Profit:F2}";
-                    text += $"{status} {order.BetContent} | ¥{order.Amount} | {profit}\n";
-                }
+                var status = order.Status == 1 ? (order.IsWin ? "✅" : "❌") : "⏳";
+                var profit = order.Profit >= 0 ? $"+{order.Profit:F2}" : $"{order.Profit:F2}";
+                text += $"{status} {order.BetContent} | ¥{order.Amount} | {profit}\n";
             }
 
-            var keyboard = new InlineKeyboardMarkup(new[]
-            {
-                new[] { InlineKeyboardButton.WithCallbackData("◀️ 返回", "menu") }
-            });
-
-            await SendMessage(chatId, text, ParseMode.Markdown, keyboard);
+            var keyboard = new InlineKeyboardMarkup(new[] { new[] { InlineKeyboardButton.WithCallbackData("◀️ 返回", "menu") } });
+            await SendMessageWithInline(chatId, text, ParseMode.Markdown, keyboard);
         }
 
         private async Task ShowSettings(long chatId, AppUser user)
@@ -508,38 +648,24 @@ namespace QuantumIdleWeb.Controllers.Api
             var text = $@"⚙️ *推送设置*
 
 {pushOrdersIcon} 注单推送: {(user.PushOrders ? "开启" : "关闭")}
-{pushAlertsIcon} 报警推送: {(user.PushAlerts ? "开启" : "关闭")}
-
-点击下方按钮切换设置";
+{pushAlertsIcon} 报警推送: {(user.PushAlerts ? "开启" : "关闭")}";
 
             var keyboard = new InlineKeyboardMarkup(new[]
             {
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData($"{pushOrdersIcon} 注单推送", "toggle_push_orders"),
-                    InlineKeyboardButton.WithCallbackData($"{pushAlertsIcon} 报警推送", "toggle_push_alerts")
-                },
+                new[] { InlineKeyboardButton.WithCallbackData($"{pushOrdersIcon} 注单推送", "toggle_push_orders"), InlineKeyboardButton.WithCallbackData($"{pushAlertsIcon} 报警推送", "toggle_push_alerts") },
                 new[] { InlineKeyboardButton.WithCallbackData("🔓 解绑账号", "unbind") },
                 new[] { InlineKeyboardButton.WithCallbackData("◀️ 返回", "menu") }
             });
 
-            await SendMessage(chatId, text, ParseMode.Markdown, keyboard);
+            await SendMessageWithInline(chatId, text, ParseMode.Markdown, keyboard);
         }
 
         private async Task ShowBuyMenu(long chatId)
         {
             var keyboard = new InlineKeyboardMarkup(new[]
             {
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData("⚡️ 1天 (5 U)", "buy_1"),
-                    InlineKeyboardButton.WithCallbackData("📅 月卡 (99 U)", "buy_30")
-                },
-                new[]
-                {
-                    InlineKeyboardButton.WithCallbackData("💎 季卡 (249 U) 🔥", "buy_90"),
-                    InlineKeyboardButton.WithCallbackData("👑 年卡 (599 U)", "buy_365")
-                }
+                new[] { InlineKeyboardButton.WithCallbackData("⚡️ 1天 (5 U)", "buy_1"), InlineKeyboardButton.WithCallbackData("📅 月卡 (99 U)", "buy_30") },
+                new[] { InlineKeyboardButton.WithCallbackData("💎 季卡 (249 U) 🔥", "buy_90"), InlineKeyboardButton.WithCallbackData("👑 年卡 (599 U)", "buy_365") }
             });
 
             var text = @"💳 *VIP 授权套餐 (USDT-TRC20)*
@@ -549,54 +675,53 @@ namespace QuantumIdleWeb.Controllers.Api
 💎 *季卡*：`249 U` (省 48 U) 🔥
 👑 *年卡*：`599 U` (日均仅 1.6 U)
 ━━━━━━━━━━━━━━
-✅ 自动发货 | 24小时无人值守
-💡 点击下方按钮选择套餐";
+✅ 自动发货 | 24小时无人值守";
 
-            await SendMessage(chatId, text, ParseMode.Markdown, keyboard);
+            await SendMessageWithInline(chatId, text, ParseMode.Markdown, keyboard);
         }
 
         private async Task ShowSupport(long chatId)
         {
             var keyboard = new InlineKeyboardMarkup(new[]
             {
-                new[] { InlineKeyboardButton.WithUrl("👩‍💻 在线客服 (充值/业务)", "https://t.me/Ao_8888888") },
-                new[] { InlineKeyboardButton.WithUrl("👨‍🔧 技术支持 (故障/建议)", "https://t.me/Jeffrey31232") }
+                new[] { InlineKeyboardButton.WithUrl("👩‍💻 在线客服", "https://t.me/Ao_8888888") },
+                new[] { InlineKeyboardButton.WithUrl("👨‍🔧 技术支持", "https://t.me/Jeffrey31232") }
             });
 
-            var text = @"🆘 *官方支持中心*
-━━━━━━━━━━━━━━
-遇到问题？请点击下方按钮直连人工服务。
-
-⏰ 在线时间：全天候响应
-⚠️ 请直接描述您遇到的问题";
-
-            await SendMessage(chatId, text, ParseMode.Markdown, keyboard);
+            await SendMessageWithInline(chatId, "🆘 *官方支持*\n\n点击下方按钮直连人工服务", ParseMode.Markdown, keyboard);
         }
+
+        #endregion
+
+        #region 账号绑定
 
         private async Task HandleBind(long chatId, string username, string password, ApplicationDbContext dbContext)
         {
             var user = await dbContext.Users.FirstOrDefaultAsync(u => u.UserName == username);
             if (user == null)
             {
-                await SendMessage(chatId, "❌ 用户名不存在");
+                await SendMessageWithReplyKeyboard(chatId, "❌ 用户名不存在");
                 return;
             }
 
             var inputHash = ComputeHash(password);
             if (user.PasswordHash != inputHash)
             {
-                await SendMessage(chatId, "❌ 密码错误");
+                await SendMessageWithReplyKeyboard(chatId, "❌ 密码错误");
                 return;
             }
 
             user.TelegramChatId = chatId;
             await dbContext.SaveChangesAsync();
 
-            await SendMessage(chatId, $"✅ 绑定成功！\n\n欢迎回来，*{username}*", ParseMode.Markdown);
+            await SendMessageWithReplyKeyboard(chatId, $"✅ 绑定成功！\n\n欢迎回来，*{username}*", ParseMode.Markdown);
             await ShowMainMenu(chatId, user, dbContext);
         }
 
-        // 底部固定键盘
+        #endregion
+
+        #region 消息发送方法
+
         private ReplyKeyboardMarkup GetMainReplyKeyboard()
         {
             return new ReplyKeyboardMarkup(new[]
@@ -609,25 +734,12 @@ namespace QuantumIdleWeb.Controllers.Api
             };
         }
 
-        private async Task SendMessage(long chatId, string text, ParseMode parseMode = ParseMode.Html,
-            InlineKeyboardMarkup? inlineKeyboard = null, ReplyKeyboardMarkup? replyKeyboard = null)
+        private async Task SendMessageWithReplyKeyboard(long chatId, string text, ParseMode parseMode = ParseMode.Html)
         {
             if (_serviceBot == null) return;
-
             try
             {
-                if (inlineKeyboard != null)
-                {
-                    await _serviceBot.SendMessage(chatId, text, parseMode: parseMode, replyMarkup: inlineKeyboard);
-                }
-                else if (replyKeyboard != null)
-                {
-                    await _serviceBot.SendMessage(chatId, text, parseMode: parseMode, replyMarkup: replyKeyboard);
-                }
-                else
-                {
-                    await _serviceBot.SendMessage(chatId, text, parseMode: parseMode);
-                }
+                await _serviceBot.SendMessage(chatId, text, parseMode: parseMode, replyMarkup: GetMainReplyKeyboard());
             }
             catch (Exception ex)
             {
@@ -638,7 +750,6 @@ namespace QuantumIdleWeb.Controllers.Api
         private async Task SendMessageWithInline(long chatId, string text, ParseMode parseMode, InlineKeyboardMarkup keyboard)
         {
             if (_serviceBot == null) return;
-
             try
             {
                 await _serviceBot.SendMessage(chatId, text, parseMode: parseMode, replyMarkup: keyboard);
@@ -649,16 +760,44 @@ namespace QuantumIdleWeb.Controllers.Api
             }
         }
 
+        private async Task SendMessageWithBothKeyboards(long chatId, string text, ParseMode parseMode, InlineKeyboardMarkup inlineKeyboard)
+        {
+            if (_serviceBot == null) return;
+            try
+            {
+                // 先发一条消息设置底部键盘
+                await _serviceBot.SendMessage(chatId, "📋", replyMarkup: GetMainReplyKeyboard());
+                // 再发主要内容和内联键盘
+                await _serviceBot.SendMessage(chatId, text, parseMode: parseMode, replyMarkup: inlineKeyboard);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"发送消息失败: chatId={chatId}");
+            }
+        }
+
+        #endregion
+
         private string ComputeHash(string input)
         {
             using var sha256 = SHA256.Create();
             var bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(input));
-            var builder = new StringBuilder();
-            for (int i = 0; i < bytes.Length; i++)
-            {
-                builder.Append(bytes[i].ToString("x2"));
-            }
-            return builder.ToString();
+            return string.Concat(bytes.Select(b => b.ToString("x2")));
+        }
+
+        private class TgLoginState
+        {
+            public int UserId { get; set; }
+            public string UserName { get; set; } = "";
+            public string PhoneNumber { get; set; } = "";
+            public LoginStep State { get; set; }
+        }
+
+        private enum LoginStep
+        {
+            WaitingPhoneNumber,
+            WaitingVerificationCode,
+            WaitingPassword
         }
     }
 }
