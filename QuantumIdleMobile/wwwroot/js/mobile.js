@@ -2,21 +2,22 @@
 
 // API 基础配置
 const API_CONFIG = {
-    baseUrl: localStorage.getItem('apiBaseUrl') || 'http://localhost:5000/api',
+    // 自动使用当前域名和协议，不再硬编码端口
+    baseUrl: localStorage.getItem('apiBaseUrl') || '/api',
     getToken: () => localStorage.getItem('token')
 };
 
 // 通用 API 请求函数
 async function apiRequest(endpoint, options = {}) {
     const token = API_CONFIG.getToken();
-    
+
     const defaultOptions = {
         headers: {
             'Content-Type': 'application/json',
             ...(token && { 'Authorization': `Bearer ${token}` })
         }
     };
-    
+
     const response = await fetch(`${API_CONFIG.baseUrl}${endpoint}`, {
         ...defaultOptions,
         ...options,
@@ -25,7 +26,7 @@ async function apiRequest(endpoint, options = {}) {
             ...(options.headers || {})
         }
     });
-    
+
     if (response.status === 401) {
         // Token 过期，跳转到登录页
         localStorage.removeItem('token');
@@ -33,7 +34,7 @@ async function apiRequest(endpoint, options = {}) {
         window.location.href = '/Home/Login';
         return null;
     }
-    
+
     return response.json();
 }
 

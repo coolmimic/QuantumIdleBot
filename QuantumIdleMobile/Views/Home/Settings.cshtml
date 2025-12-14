@@ -109,10 +109,7 @@
         }
     }
     
-    const port = 5000;
-    const protocol = window.location.protocol;
-    const hostname = window.location.hostname;
-    const defaultApiUrl = `${protocol}//${hostname}:${port}/api`;
+    const defaultApiUrl = '/api';
 
     // 加载保存的 API 地址
     const savedApiUrl = localStorage.getItem('apiBaseUrl');
