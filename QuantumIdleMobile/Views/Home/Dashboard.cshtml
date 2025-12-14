@@ -5,7 +5,10 @@
 <div class="page-container">
     <div class="header">
         <h1>⚡ 量子挂机</h1>
-        <button class="btn-icon" onclick="logout()">退出</button>
+        <div style="display: flex; gap: 8px;">
+            <button class="btn-icon" onclick="toggleLogPanel()" title="运行日志">📋</button>
+            <button class="btn-icon" onclick="logout()">退出</button>
+        </div>
     </div>
     
     <div class="content">
@@ -25,7 +28,7 @@
             <h3>挂机控制</h3>
             
             <!-- 模式切换 -->
-            <div class="mode-toggle" style="display: flex; gap: 8px; margin-bottom: 16px;">
+            <div class="mode-toggle">
                 <button id="realModeBtn" class="mode-btn active" onclick="setMode(false)">
                     💰 真实模式
                 </button>
@@ -86,11 +89,7 @@
             </a>
             <a href="/Home/Orders" class="action-card">
                 <div class="action-icon">📝</div>
-                <div class="action-text">注单列表</div>
-            </a>
-            <a href="/Home/Logs" class="action-card">
-                <div class="action-icon">📜</div>
-                <div class="action-text">运行日志</div>
+                <div class="action-text">注单记录</div>
             </a>
             <div class="action-card" onclick="resetData()" style="cursor: pointer;">
                 <div class="action-icon">🔄</div>
@@ -114,6 +113,7 @@
         </div>
     </div>
     
+    <!-- 底部导航 -->
     <div class="bottom-nav">
         <a href="/Home/Dashboard" class="nav-item active">
             <span class="nav-icon">🏠</span>
@@ -127,15 +127,33 @@
             <span class="nav-icon">📋</span>
             <span class="nav-text">方案</span>
         </a>
-        <a href="/Home/History" class="nav-item">
-            <span class="nav-icon">📊</span>
-            <span class="nav-text">历史</span>
+        <a href="/Home/Orders" class="nav-item">
+            <span class="nav-icon">📝</span>
+            <span class="nav-text">注单</span>
         </a>
         <a href="/Home/Settings" class="nav-item">
             <span class="nav-icon">⚙️</span>
             <span class="nav-text">设置</span>
         </a>
     </div>
+    
+    <!-- 运行日志滑出面板 -->
+    <div id="logPanel" class="log-panel">
+        <div class="log-panel-header">
+            <h3>运行日志</h3>
+            <div style="display: flex; gap: 8px;">
+                <button class="btn btn-sm" onclick="refreshLogs()">刷新</button>
+                <button class="btn btn-sm" onclick="clearLogs()">清空</button>
+                <button class="btn-icon" onclick="toggleLogPanel()">✕</button>
+            </div>
+        </div>
+        <div id="logContent" class="log-panel-content">
+            <p class="empty-text">暂无日志</p>
+        </div>
+    </div>
+    
+    <!-- 遮罩层 -->
+    <div id="logOverlay" class="log-overlay" onclick="toggleLogPanel()"></div>
 </div>
 
 <style>
@@ -155,6 +173,9 @@
     }
     
     .mode-toggle {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 16px;
         background: var(--bg-tertiary);
         padding: 4px;
         border-radius: var(--radius-md);
@@ -209,6 +230,84 @@
         color: var(--text-secondary);
         margin-bottom: 8px;
     }
+    
+    /* 日志滑出面板 */
+    .log-panel {
+        position: fixed;
+        top: 0;
+        right: -100%;
+        width: 85%;
+        max-width: 400px;
+        height: 100%;
+        background: var(--bg-secondary);
+        z-index: 1001;
+        display: flex;
+        flex-direction: column;
+        transition: right 0.3s ease;
+        box-shadow: -4px 0 20px rgba(0,0,0,0.3);
+    }
+    .log-panel.open {
+        right: 0;
+    }
+    .log-panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px;
+        border-bottom: 1px solid var(--border-color);
+        background: var(--bg-primary);
+    }
+    .log-panel-header h3 {
+        margin: 0;
+        font-size: 16px;
+    }
+    .log-panel-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 12px;
+    }
+    .log-item {
+        font-family: 'Consolas', 'Monaco', monospace;
+        font-size: 12px;
+        padding: 8px 10px;
+        border-radius: var(--radius-sm);
+        background: var(--bg-primary);
+        margin-bottom: 6px;
+        line-height: 1.4;
+        color: var(--text-secondary);
+        word-break: break-all;
+    }
+    .log-item:nth-child(odd) {
+        background: var(--bg-tertiary);
+    }
+    .empty-text {
+        text-align: center;
+        color: var(--text-tertiary);
+        padding: 40px 0;
+    }
+    
+    /* 遮罩层 */
+    .log-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s ease;
+    }
+    .log-overlay.open {
+        opacity: 1;
+        visibility: visible;
+    }
+    
+    .btn-sm {
+        padding: 4px 10px;
+        font-size: 12px;
+    }
 </style>
 
 @section Scripts {
@@ -224,6 +323,7 @@
     let isSimulation = false;
     let isExpired = false;
     let isTelegramConnected = false;
+    let logRefreshInterval = null;
     
     document.addEventListener('DOMContentLoaded', function() {
         loadUserInfo();
@@ -235,6 +335,69 @@
         setInterval(loadBotStatus, 5000);
     });
 
+    // ========== 日志面板 ==========
+    function toggleLogPanel() {
+        const panel = document.getElementById('logPanel');
+        const overlay = document.getElementById('logOverlay');
+        const isOpen = panel.classList.contains('open');
+        
+        if (isOpen) {
+            panel.classList.remove('open');
+            overlay.classList.remove('open');
+            if (logRefreshInterval) {
+                clearInterval(logRefreshInterval);
+                logRefreshInterval = null;
+            }
+        } else {
+            panel.classList.add('open');
+            overlay.classList.add('open');
+            refreshLogs();
+            // 打开时自动刷新
+            logRefreshInterval = setInterval(refreshLogs, 3000);
+        }
+    }
+    
+    async function refreshLogs() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/bot/logs?count=50`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                const container = document.getElementById('logContent');
+                
+                if (result.success && result.data && result.data.length > 0) {
+                    container.innerHTML = result.data.map(log => 
+                        `<div class="log-item">${log}</div>`
+                    ).join('');
+                } else {
+                    container.innerHTML = '<p class="empty-text">暂无日志</p>';
+                }
+            }
+        } catch (error) {
+            console.error('加载日志失败:', error);
+        }
+    }
+    
+    async function clearLogs() {
+        if (!confirm('确定要清空日志吗？')) return;
+        
+        try {
+            const response = await fetch(`${API_BASE_URL}/bot/logs/clear`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (response.ok) {
+                refreshLogs();
+            }
+        } catch (error) {
+            console.error('清空日志失败:', error);
+        }
+    }
+
+    // ========== 原有功能 ==========
     async function checkTelegramStatus() {
         try {
             const response = await fetch(`${API_BASE_URL}/telegram/status`, {
@@ -294,13 +457,11 @@
     }
 
     async function toggleRunning() {
-        // 检查账户是否过期
         if (isExpired) {
             alert('⚠️ 您的账户已过期！请前往设置页面激活卡密续费后使用。');
             return;
         }
         
-        // 检查 Telegram 是否已连接
         if (!isTelegramConnected) {
             if (confirm('⚠️ 请先登录 Telegram！\n\n点击确定前往 TG 连接页面')) {
                 window.location.href = '/Home/Telegram';
@@ -328,7 +489,6 @@
     }
 
     async function setMode(simulation) {
-        // 检查账户是否过期
         if (isExpired) {
             alert('⚠️ 您的账户已过期！请前往设置页面激活卡密续费后使用。');
             return;
@@ -460,7 +620,6 @@
             
             if (result.success) {
                 alert(`✅ ${result.message}`);
-                // 刷新页面数据
                 loadBotStatus();
                 loadStats();
             } else {
