@@ -539,6 +539,11 @@ namespace QuantumIdleWeb.Controllers.Api
                 InlineKeyboardButton.WithCallbackData("📝 注单", "orders"),
                 InlineKeyboardButton.WithCallbackData("⚙️ 设置", "settings")
             });
+            // 小程序入口
+            buttons.Add(new[]
+            {
+                InlineKeyboardButton.WithUrl("🚀 进入小程序", "https://t.me/liangziweb_bot/liangzi")
+            });
 
             var keyboard = new InlineKeyboardMarkup(buttons);
             await SendMessageWithBothKeyboards(chatId, text, ParseMode.Markdown, keyboard);
