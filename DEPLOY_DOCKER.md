@@ -60,6 +60,15 @@ docker-compose down
 
 # 更新代码后重新部署
 git pull  # 或重新上传代码
+
+# === 首次开启 HTTPS 需要执行 ===
+# 赋予脚本执行权限
+chmod +x init-letsencrypt.sh
+# 运行初始化脚本（只需执行一次）
+sudo ./init-letsencrypt.sh
+
+# === 日常维护 ===
+# 以后只需要正常启动
 docker-compose up -d --build
 ```
 
