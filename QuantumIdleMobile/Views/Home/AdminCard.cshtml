@@ -1,0 +1,150 @@
+@{
+    ViewData["Title"] = "管理员 - 卡密生成";
+}
+
+<div class="page-container">
+    <div class="header">
+        <h1>🔑 卡密生成</h1>
+    </div>
+    
+    <div class="content">
+        <div class="card">
+            <h3>管理员验证</h3>
+            <div class="form-group">
+                <label for="adminPassword">管理员密码</label>
+                <input type="password" id="adminPassword" class="form-input" placeholder="请输入管理员密码" />
+            </div>
+            
+            <div class="form-group">
+                <label for="durationDays">有效天数</label>
+                <input type="number" id="durationDays" class="form-input" value="30" min="1" max="3650" />
+            </div>
+            
+            <div class="form-group">
+                <label for="remark">备注（可选）</label>
+                <input type="text" id="remark" class="form-input" placeholder="例如：VIP客户" />
+            </div>
+            
+            <button class="btn btn-primary btn-block" onclick="generateCard()" id="generateBtn">
+                生成卡密
+            </button>
+        </div>
+        
+        <!-- 生成结果 -->
+        <div class="card" id="resultCard" style="display: none;">
+            <h3>✅ 卡密生成成功</h3>
+            <div class="result-container">
+                <div class="card-code" id="generatedCode">-</div>
+                <div class="card-info">
+                    <span>有效期：<strong id="cardDays">-</strong> 天</span>
+                </div>
+                <button class="btn btn-secondary btn-block" onclick="copyCode()">
+                    📋 复制卡密
+                </button>
+            </div>
+        </div>
+        
+        <div class="card" style="margin-top: 24px;">
+            <a href="/Home/Login" class="btn btn-secondary btn-block">
+                返回登录页
+            </a>
+        </div>
+    </div>
+</div>
+
+<style>
+    .result-container {
+        text-align: center;
+        padding: 16px 0;
+    }
+    .card-code {
+        background: var(--bg-tertiary);
+        padding: 16px;
+        border-radius: var(--radius-md);
+        font-family: 'Consolas', monospace;
+        font-size: 14px;
+        word-break: break-all;
+        margin-bottom: 12px;
+        user-select: all;
+        cursor: pointer;
+    }
+    .card-info {
+        color: var(--text-secondary);
+        font-size: 14px;
+        margin-bottom: 16px;
+    }
+</style>
+
+@section Scripts {
+<script>
+    const port = 5000;
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    const API_BASE_URL = `${protocol}//${hostname}:${port}/api`;
+    
+    async function generateCard() {
+        const adminPassword = document.getElementById('adminPassword').value.trim();
+        const durationDays = parseInt(document.getElementById('durationDays').value);
+        const remark = document.getElementById('remark').value.trim();
+        
+        if (!adminPassword) {
+            alert('请输入管理员密码');
+            return;
+        }
+        
+        if (!durationDays || durationDays < 1) {
+            alert('请输入有效的天数');
+            return;
+        }
+        
+        const btn = document.getElementById('generateBtn');
+        btn.disabled = true;
+        btn.textContent = '生成中...';
+        
+        try {
+            const response = await fetch(`${API_BASE_URL}/cardkey/generate`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    adminPassword: adminPassword,
+                    durationDays: durationDays,
+                    remark: remark || 'Web-Admin'
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                document.getElementById('generatedCode').textContent = result.data;
+                document.getElementById('cardDays').textContent = result.days;
+                document.getElementById('resultCard').style.display = 'block';
+            } else {
+                alert(result.message || '生成失败');
+            }
+        } catch (error) {
+            alert('网络错误: ' + error.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '生成卡密';
+        }
+    }
+    
+    function copyCode() {
+        const code = document.getElementById('generatedCode').textContent;
+        navigator.clipboard.writeText(code).then(() => {
+            alert('✅ 卡密已复制到剪贴板');
+        }).catch(() => {
+            // Fallback
+            const textArea = document.createElement('textarea');
+            textArea.value = code;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            alert('✅ 卡密已复制到剪贴板');
+        });
+    }
+</script>
+}

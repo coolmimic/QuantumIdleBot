@@ -1,0 +1,386 @@
+@{
+    ViewData["Title"] = "注单列表";
+}
+
+<div class="page-container">
+    <div class="header">
+        <h1>📝 注单列表</h1>
+        <button class="btn-icon" onclick="refreshOrders()">刷新</button>
+    </div>
+    
+    <div class="content">
+        <!-- 筛选工具栏 -->
+        <div class="filter-bar">
+            <select id="pageSize" class="form-input filter-select">
+                <option value="20">20 条</option>
+                <option value="50">50 条</option>
+                <option value="100">100 条</option>
+            </select>
+            <div class="stats-summary" id="statsSummary">
+                <span class="stat-item">总计: <strong id="totalOrders">0</strong></span>
+                <span class="stat-item profit-positive" id="totalProfit">+0.00</span>
+            </div>
+        </div>
+        
+        <!-- 注单列表 -->
+        <div id="ordersList" class="orders-container">
+            <div class="loading-state">
+                <div class="spinner"></div>
+                <p>加载中...</p>
+            </div>
+        </div>
+        
+        <!-- 分页 -->
+        <div class="pagination">
+            <button id="prevPage" class="btn btn-secondary" onclick="changePage(-1)">
+                ← 上一页
+            </button>
+            <span id="pageInfo">第 1 页</span>
+            <button id="nextPage" class="btn btn-secondary" onclick="changePage(1)">
+                下一页 →
+            </button>
+        </div>
+    </div>
+    
+    <div class="bottom-nav">
+        <a href="/Home/Dashboard" class="nav-item">
+            <span class="nav-icon">🏠</span>
+            <span class="nav-text">首页</span>
+        </a>
+        <a href="/Home/Telegram" class="nav-item">
+            <span class="nav-icon">📱</span>
+            <span class="nav-text">TG连接</span>
+        </a>
+        <a href="/Home/Schemes" class="nav-item">
+            <span class="nav-icon">📋</span>
+            <span class="nav-text">方案</span>
+        </a>
+        <a href="/Home/History" class="nav-item">
+            <span class="nav-icon">📊</span>
+            <span class="nav-text">历史</span>
+        </a>
+        <a href="/Home/Settings" class="nav-item">
+            <span class="nav-icon">⚙️</span>
+            <span class="nav-text">设置</span>
+        </a>
+    </div>
+</div>
+
+<style>
+    .filter-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        margin-bottom: 12px;
+    }
+    .filter-select {
+        width: auto;
+        min-width: 100px;
+    }
+    .stats-summary {
+        display: flex;
+        gap: 16px;
+        font-size: 13px;
+    }
+    .stats-summary .stat-item {
+        color: var(--text-secondary);
+    }
+    
+    .orders-container {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .loading-state, .empty-state, .error-state {
+        text-align: center;
+        padding: 40px 20px;
+        color: var(--text-secondary);
+    }
+    .loading-state .spinner {
+        width: 32px;
+        height: 32px;
+        border: 3px solid rgba(255, 255, 255, 0.2);
+        border-top-color: var(--accent-color);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin: 0 auto 12px;
+    }
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+    
+    /* 注单卡片 - 紧凑型设计 */
+    .order-item {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        padding: 12px;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+        border-left: 3px solid var(--text-tertiary);
+        transition: all 0.2s;
+    }
+    .order-item:hover {
+        background: var(--bg-tertiary);
+    }
+    .order-item.win {
+        border-left-color: var(--success-color);
+    }
+    .order-item.lose {
+        border-left-color: var(--error-color);
+    }
+    .order-item.pending {
+        border-left-color: var(--warning-color);
+    }
+    
+    .order-main {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .order-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        font-size: 13px;
+    }
+    .order-row .field {
+        display: flex;
+        gap: 4px;
+    }
+    .order-row .label {
+        color: var(--text-tertiary);
+    }
+    .order-row .value {
+        color: var(--text-primary);
+        font-weight: 500;
+    }
+    
+    .order-right {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        justify-content: center;
+        gap: 4px;
+    }
+    .order-profit {
+        font-size: 16px;
+        font-weight: 600;
+    }
+    .order-status {
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 10px;
+        background: var(--bg-tertiary);
+        color: var(--text-secondary);
+    }
+    .order-status.settled {
+        background: rgba(82, 196, 26, 0.15);
+        color: var(--success-color);
+    }
+    .order-status.pending {
+        background: rgba(250, 173, 20, 0.15);
+        color: var(--warning-color);
+    }
+    
+    .profit-positive { color: var(--success-color); }
+    .profit-negative { color: var(--error-color); }
+    
+    .pagination {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 16px;
+        padding: 12px 0;
+    }
+    .pagination span {
+        color: var(--text-secondary);
+        font-size: 14px;
+    }
+</style>
+
+@section Scripts {
+<script>
+    const port = 5000;
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    const API_BASE_URL = `${protocol}//${hostname}:${port}/api`;
+    
+    const token = localStorage.getItem('token');
+    if (!token) {
+        window.location.href = '/Home/Login';
+    }
+    
+    let currentPage = 1;
+    let pageSize = 20;
+    let schemeMap = {}; // 缓存方案名映射
+    
+    // 加载方案列表获取名称映射
+    async function loadSchemes() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/scheme/list`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const result = await response.json();
+            if (result.success && result.data) {
+                result.data.forEach(s => {
+                    schemeMap[s.id] = s.name;
+                });
+            }
+        } catch (error) {
+            console.error('加载方案失败:', error);
+        }
+    }
+    
+    // 格式化期号：如果>=4位显示后4位
+    function formatIssueNumber(issue) {
+        if (!issue) return '-';
+        return issue.length >= 4 ? '...' + issue.slice(-4) : issue;
+    }
+    
+    // 格式化时间：只显示时分秒
+    function formatTime(dateStr) {
+        if (!dateStr) return '-';
+        const date = new Date(dateStr);
+        return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+    
+    // 格式化日期+时间
+    function formatDateTime(dateStr) {
+        if (!dateStr) return '-';
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }) + ' ' +
+               date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+    }
+    
+    async function loadOrders() {
+        const ordersList = document.getElementById('ordersList');
+        ordersList.innerHTML = `
+            <div class="loading-state">
+                <div class="spinner"></div>
+                <p>加载中...</p>
+            </div>
+        `;
+        
+        try {
+            const response = await fetch(`${API_BASE_URL}/betorder/list?page=${currentPage}&size=${pageSize}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success && result.data && result.data.length > 0) {
+                let html = '';
+                let totalProfit = 0;
+                
+                result.data.forEach(order => {
+                    const schemeName = schemeMap[order.schemeId] || `方案#${order.schemeId}`;
+                    const issueDisplay = formatIssueNumber(order.issueNumber);
+                    const timeDisplay = formatDateTime(order.betTime);
+                    const profit = order.profit || 0;
+                    totalProfit += profit;
+                    
+                    // 状态判断
+                    const isSettled = order.status === 1;
+                    const isWin = isSettled && profit > 0;
+                    const isLose = isSettled && profit < 0;
+                    const itemClass = isWin ? 'win' : (isLose ? 'lose' : 'pending');
+                    const statusText = isSettled ? '已结算' : '待结算';
+                    const statusClass = isSettled ? 'settled' : 'pending';
+                    
+                    const profitClass = profit >= 0 ? 'profit-positive' : 'profit-negative';
+                    const profitDisplay = profit >= 0 ? `+${profit.toFixed(2)}` : profit.toFixed(2);
+                    
+                    html += `
+                        <div class="order-item ${itemClass}">
+                            <div class="order-main">
+                                <div class="order-row">
+                                    <div class="field">
+                                        <span class="label">时间</span>
+                                        <span class="value">${timeDisplay}</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="label">方案</span>
+                                        <span class="value">${schemeName}</span>
+                                    </div>
+                                </div>
+                                <div class="order-row">
+                                    <div class="field">
+                                        <span class="label">期号</span>
+                                        <span class="value">${issueDisplay}</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="label">下注</span>
+                                        <span class="value">${order.betContent || '-'}</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="label">金额</span>
+                                        <span class="value">${order.amount || 0}</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="label">开奖</span>
+                                        <span class="value">${order.openResult || '-'}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="order-right">
+                                <span class="order-profit ${profitClass}">${profitDisplay}</span>
+                                <span class="order-status ${statusClass}">${statusText}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                ordersList.innerHTML = html;
+                
+                // 更新统计
+                document.getElementById('totalOrders').textContent = result.data.length;
+                const totalProfitEl = document.getElementById('totalProfit');
+                totalProfitEl.textContent = (totalProfit >= 0 ? '+' : '') + totalProfit.toFixed(2);
+                totalProfitEl.className = 'stat-item ' + (totalProfit >= 0 ? 'profit-positive' : 'profit-negative');
+            } else {
+                ordersList.innerHTML = '<div class="empty-state">📭 暂无注单记录</div>';
+                document.getElementById('totalOrders').textContent = '0';
+                document.getElementById('totalProfit').textContent = '+0.00';
+            }
+            
+            updatePageInfo();
+        } catch (error) {
+            ordersList.innerHTML = '<div class="error-state">❌ 加载失败，请稍后重试</div>';
+            console.error('加载注单失败:', error);
+        }
+    }
+    
+    function changePage(delta) {
+        currentPage += delta;
+        if (currentPage < 1) currentPage = 1;
+        loadOrders();
+    }
+    
+    function refreshOrders() {
+        currentPage = 1;
+        loadOrders();
+    }
+    
+    function updatePageInfo() {
+        document.getElementById('pageInfo').textContent = `第 ${currentPage} 页`;
+        document.getElementById('prevPage').disabled = currentPage <= 1;
+    }
+    
+    document.getElementById('pageSize').addEventListener('change', function(e) {
+        pageSize = parseInt(e.target.value);
+        currentPage = 1;
+        loadOrders();
+    });
+    
+    // 页面加载时执行
+    (async function() {
+        await loadSchemes();
+        loadOrders();
+    })();
+</script>
+}

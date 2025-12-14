@@ -1,0 +1,122 @@
+@{
+    ViewData["Title"] = "开奖历史";
+}
+
+<div class="page-container">
+    <div class="header">
+        <h1>📊 开奖历史</h1>
+        <button class="btn-icon" onclick="refreshHistory()">刷新</button>
+    </div>
+    
+    <div class="content">
+        <div class="card">
+            <div class="form-group" style="margin-bottom: 0;">
+                <label for="groupSelect">选择群组</label>
+                <select id="groupSelect" class="form-input" onchange="loadHistory()">
+                    <option value="">选择群组查看历史...</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="historyList">
+            <div class="info-card">
+                <p>💡 开奖历史功能需要连接 Telegram 后使用</p>
+                <p>请先在 "TG连接" 页面连接您的 Telegram 账号。</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="bottom-nav">
+        <a href="/Home/Dashboard" class="nav-item">
+            <span class="nav-icon">🏠</span>
+            <span class="nav-text">首页</span>
+        </a>
+        <a href="/Home/Telegram" class="nav-item">
+            <span class="nav-icon">📱</span>
+            <span class="nav-text">TG连接</span>
+        </a>
+        <a href="/Home/Schemes" class="nav-item">
+            <span class="nav-icon">📋</span>
+            <span class="nav-text">方案</span>
+        </a>
+        <a href="/Home/History" class="nav-item active">
+            <span class="nav-icon">📊</span>
+            <span class="nav-text">历史</span>
+        </a>
+        <a href="/Home/Settings" class="nav-item">
+            <span class="nav-icon">⚙️</span>
+            <span class="nav-text">设置</span>
+        </a>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    // 动态构建 API 地址，适配内网和外网访问
+    const port = 5000;
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    const API_BASE_URL = `${protocol}//${hostname}:${port}/api`;
+    const token = localStorage.getItem('token');
+    
+    if (!token) {
+        window.location.href = '/Home/Login';
+    }
+
+    async function loadGroups() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/telegram/chats`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success && result.data && result.data.length > 0) {
+                const select = document.getElementById('groupSelect');
+                result.data.forEach(chat => {
+                    const option = document.createElement('option');
+                    option.value = chat.id;
+                    option.textContent = `${chat.name} (${chat.isChannel ? '频道' : '群组'})`;
+                    select.appendChild(option);
+                });
+                
+                // 更新历史列表提示
+                document.getElementById('historyList').innerHTML = `
+                    <div class="empty-state">请选择一个群组查看开奖历史</div>
+                `;
+            }
+        } catch (error) {
+            console.error('加载群组失败:', error);
+        }
+    }
+
+    function loadHistory() {
+        const groupId = document.getElementById('groupSelect').value;
+        if (!groupId) {
+            document.getElementById('historyList').innerHTML = `
+                <div class="empty-state">请选择一个群组查看开奖历史</div>
+            `;
+            return;
+        }
+        
+        // TODO: 调用后端 API 获取开奖历史
+        document.getElementById('historyList').innerHTML = `
+            <div class="card">
+                <h3>开奖记录</h3>
+                <div class="empty-state">
+                    该功能开发中，敬请期待...
+                </div>
+            </div>
+        `;
+    }
+
+    function refreshHistory() {
+        loadHistory();
+    }
+
+    // 页面加载时加载群组
+    loadGroups();
+</script>
+}

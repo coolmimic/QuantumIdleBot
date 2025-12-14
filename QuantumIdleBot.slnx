@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="QuantumIdleDesktop/QuantumIdleDesktop.csproj" />
+  <Project Path="QuantumIdleModels/QuantumIdleModels.csproj" Id="7875bf5a-a322-4e01-8497-e4b5f4bbc96d" />
+  <Project Path="QuantumIdleUpdater/QuantumIdleUpdater.csproj" Id="394b6af9-a9be-468e-93c9-3e9ead61177b" />
+  <Project Path="QuantumIdleWEB/QuantumIdleWEB.csproj" Id="04ce0a99-3b90-41e1-bec7-7f255b96557c" />
+  <Project Path="QuantumIdleMobile/QuantumIdleMobile.csproj" />
+</Solution>

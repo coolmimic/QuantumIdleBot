@@ -1,0 +1,22 @@
+{
+  "Minesweeper": {
+    "BigSmall": 1.98,
+    "OddEven": 1.98,
+    "Digital": 5.5
+  },
+  "Canada28": {
+    "BigSmall": 1.95,
+    "OddEven": 1.95,
+    "Digital": 10.0
+  },
+  "Kuai3": {
+    "BigSmall": 1.96,
+    "OddEven": 1.96,
+    "Digital": 8.5
+  },
+  "Canada20": {
+    "BigSmall": 2,
+    "OddEven": 2,
+    "Digital": 5
+  }
+}

@@ -1,0 +1,485 @@
+@{
+    ViewData["Title"] = "仪表板";
+}
+
+<div class="page-container">
+    <div class="header">
+        <h1>⚡ 量子挂机</h1>
+        <button class="btn-icon" onclick="logout()">退出</button>
+    </div>
+    
+    <div class="content">
+        <!-- 状态卡片 -->
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h3 style="margin: 0;">账户信息</h3>
+                <div id="runningIndicator" class="status-badge stopped">已停止</div>
+            </div>
+            <div id="userInfo">
+                <p>加载中...</p>
+            </div>
+        </div>
+        
+        <!-- 挂机控制 -->
+        <div class="card">
+            <h3>挂机控制</h3>
+            
+            <!-- 模式切换 -->
+            <div class="mode-toggle" style="display: flex; gap: 8px; margin-bottom: 16px;">
+                <button id="realModeBtn" class="mode-btn active" onclick="setMode(false)">
+                    💰 真实模式
+                </button>
+                <button id="simModeBtn" class="mode-btn" onclick="setMode(true)">
+                    🎮 模拟模式
+                </button>
+            </div>
+            
+            <!-- 开始/停止按钮 -->
+            <button id="startBtn" class="btn btn-success btn-block" onclick="toggleRunning()">
+                <span id="controlText">▶ 开始挂机</span>
+            </button>
+            
+            <!-- 状态显示 - 实盘 -->
+            <div class="stats-section">
+                <div class="stats-label">💰 实盘数据</div>
+                <div class="stats-row">
+                    <div class="stat-item">
+                        <span class="label">余额</span>
+                        <span class="value" id="balanceValue">0.00</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="label">盈亏</span>
+                        <span class="value" id="profitValue">0.00</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="label">流水</span>
+                        <span class="value" id="turnoverValue">0.00</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 状态显示 - 模拟 -->
+            <div class="stats-section" style="margin-top: 12px;">
+                <div class="stats-label">🎮 模拟数据</div>
+                <div class="stats-row">
+                    <div class="stat-item">
+                        <span class="label">模拟盈亏</span>
+                        <span class="value" id="simProfitValue">0.00</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="label">模拟流水</span>
+                        <span class="value" id="simTurnoverValue">0.00</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 快捷入口 -->
+        <div class="quick-actions">
+            <a href="/Home/Telegram" class="action-card">
+                <div class="action-icon">📱</div>
+                <div class="action-text">TG 连接</div>
+            </a>
+            <a href="/Home/Schemes" class="action-card">
+                <div class="action-icon">📋</div>
+                <div class="action-text">方案管理</div>
+            </a>
+            <a href="/Home/Orders" class="action-card">
+                <div class="action-icon">📝</div>
+                <div class="action-text">注单列表</div>
+            </a>
+            <a href="/Home/Logs" class="action-card">
+                <div class="action-icon">📜</div>
+                <div class="action-text">运行日志</div>
+            </a>
+            <div class="action-card" onclick="resetData()" style="cursor: pointer;">
+                <div class="action-icon">🔄</div>
+                <div class="action-text">数据重置</div>
+            </div>
+        </div>
+        
+        <!-- 今日统计 -->
+        <div class="card" style="margin-top: 12px;">
+            <h3>今日统计</h3>
+            <div class="stats-container">
+                <div class="stat-card">
+                    <div class="stat-label">今日注单</div>
+                    <div class="stat-value" id="todayOrders">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">今日盈亏</div>
+                    <div class="stat-value" id="todayProfit">0.00</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="bottom-nav">
+        <a href="/Home/Dashboard" class="nav-item active">
+            <span class="nav-icon">🏠</span>
+            <span class="nav-text">首页</span>
+        </a>
+        <a href="/Home/Telegram" class="nav-item">
+            <span class="nav-icon">📱</span>
+            <span class="nav-text">TG连接</span>
+        </a>
+        <a href="/Home/Schemes" class="nav-item">
+            <span class="nav-icon">📋</span>
+            <span class="nav-text">方案</span>
+        </a>
+        <a href="/Home/History" class="nav-item">
+            <span class="nav-icon">📊</span>
+            <span class="nav-text">历史</span>
+        </a>
+        <a href="/Home/Settings" class="nav-item">
+            <span class="nav-icon">⚙️</span>
+            <span class="nav-text">设置</span>
+        </a>
+    </div>
+</div>
+
+<style>
+    .status-badge {
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    .status-badge.running {
+        background: var(--success-color);
+        color: white;
+    }
+    .status-badge.stopped {
+        background: var(--error-color);
+        color: white;
+    }
+    
+    .mode-toggle {
+        background: var(--bg-tertiary);
+        padding: 4px;
+        border-radius: var(--radius-md);
+    }
+    .mode-btn {
+        flex: 1;
+        padding: 10px;
+        border: none;
+        background: transparent;
+        color: var(--text-secondary);
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        font-size: 14px;
+        transition: all 0.2s;
+    }
+    .mode-btn.active {
+        background: var(--accent-color);
+        color: white;
+        font-weight: 600;
+    }
+    .mode-btn:not(.active):hover {
+        background: var(--bg-primary);
+    }
+    
+    .stats-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 12px;
+        background: var(--bg-tertiary);
+        border-radius: var(--radius-md);
+    }
+    .stat-item {
+        text-align: center;
+    }
+    .stat-item .label {
+        display: block;
+        font-size: 12px;
+        color: var(--text-tertiary);
+        margin-bottom: 4px;
+    }
+    .stat-item .value {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+    
+    .stats-section {
+        margin-top: 16px;
+    }
+    .stats-label {
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-bottom: 8px;
+    }
+</style>
+
+@section Scripts {
+<script>
+    const port = 5000;
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    const API_BASE_URL = `${protocol}//${hostname}:${port}/api`;
+    const token = localStorage.getItem('token');
+    
+    if (!token) {
+        window.location.href = '/Home/Login';
+    }
+    
+    let isRunning = false;
+    let isSimulation = false;
+    let isExpired = false;
+    let isTelegramConnected = false;
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        loadUserInfo();
+        checkTelegramStatus();
+        loadBotStatus();
+        loadStats();
+        
+        // 定时刷新状态
+        setInterval(loadBotStatus, 5000);
+    });
+
+    async function checkTelegramStatus() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/telegram/status`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                isTelegramConnected = result.isConnected;
+            }
+        } catch (error) {
+            console.error('检查Telegram状态失败:', error);
+        }
+    }
+
+    async function loadBotStatus() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/bot/status`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                if (result.success && result.data) {
+                    const status = result.data;
+                    isRunning = status.isRunning;
+                    isSimulation = status.isSimulation;
+                    
+                    updateControlUI();
+                    updateModeUI();
+                    
+                    // 余额
+                    document.getElementById('balanceValue').textContent = (status.balance || 0).toFixed(2);
+                    
+                    // 实盘盈亏
+                    const profitEl = document.getElementById('profitValue');
+                    const profit = status.profit || 0;
+                    profitEl.textContent = (profit >= 0 ? '+' : '') + profit.toFixed(2);
+                    profitEl.style.color = profit >= 0 ? 'var(--success-color)' : 'var(--error-color)';
+                    
+                    // 实盘流水
+                    document.getElementById('turnoverValue').textContent = (status.turnover || 0).toFixed(2);
+                    
+                    // 模拟盈亏
+                    const simProfitEl = document.getElementById('simProfitValue');
+                    const simProfit = status.simProfit || 0;
+                    simProfitEl.textContent = (simProfit >= 0 ? '+' : '') + simProfit.toFixed(2);
+                    simProfitEl.style.color = simProfit >= 0 ? 'var(--success-color)' : 'var(--error-color)';
+                    
+                    // 模拟流水
+                    document.getElementById('simTurnoverValue').textContent = (status.simTurnover || 0).toFixed(2);
+                }
+            }
+        } catch (error) {
+            console.error('加载状态失败:', error);
+        }
+    }
+
+    async function toggleRunning() {
+        // 检查账户是否过期
+        if (isExpired) {
+            alert('⚠️ 您的账户已过期！请前往设置页面激活卡密续费后使用。');
+            return;
+        }
+        
+        // 检查 Telegram 是否已连接
+        if (!isTelegramConnected) {
+            if (confirm('⚠️ 请先登录 Telegram！\n\n点击确定前往 TG 连接页面')) {
+                window.location.href = '/Home/Telegram';
+            }
+            return;
+        }
+        
+        const endpoint = isRunning ? 'stop' : 'start';
+        try {
+            const response = await fetch(`${API_BASE_URL}/bot/${endpoint}`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                if (result.success && result.data) {
+                    isRunning = result.data.isRunning;
+                    updateControlUI();
+                }
+            }
+        } catch (error) {
+            alert('操作失败: ' + error.message);
+        }
+    }
+
+    async function setMode(simulation) {
+        // 检查账户是否过期
+        if (isExpired) {
+            alert('⚠️ 您的账户已过期！请前往设置页面激活卡密续费后使用。');
+            return;
+        }
+        
+        try {
+            const response = await fetch(`${API_BASE_URL}/bot/mode`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ isSimulation: simulation })
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                if (result.success && result.data) {
+                    isSimulation = result.data.isSimulation;
+                    updateModeUI();
+                }
+            }
+        } catch (error) {
+            alert('切换模式失败: ' + error.message);
+        }
+    }
+
+    function updateControlUI() {
+        const startBtn = document.getElementById('startBtn');
+        const controlText = document.getElementById('controlText');
+        const indicator = document.getElementById('runningIndicator');
+        
+        if (isRunning) {
+            startBtn.className = 'btn btn-danger btn-block';
+            controlText.textContent = '⏹ 停止挂机';
+            indicator.textContent = '运行中';
+            indicator.className = 'status-badge running';
+        } else {
+            startBtn.className = 'btn btn-success btn-block';
+            controlText.textContent = '▶ 开始挂机';
+            indicator.textContent = '已停止';
+            indicator.className = 'status-badge stopped';
+        }
+    }
+
+    function updateModeUI() {
+        const realBtn = document.getElementById('realModeBtn');
+        const simBtn = document.getElementById('simModeBtn');
+        
+        if (isSimulation) {
+            simBtn.classList.add('active');
+            realBtn.classList.remove('active');
+        } else {
+            realBtn.classList.add('active');
+            simBtn.classList.remove('active');
+        }
+    }
+    
+    function loadUserInfo() {
+        try {
+            const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
+            const expireDate = userInfo.expireTime ? new Date(userInfo.expireTime) : null;
+            isExpired = expireDate && expireDate < new Date();
+            
+            let expiredWarning = '';
+            if (isExpired) {
+                expiredWarning = `
+                <div style="margin-top: 12px; padding: 12px; background: rgba(255, 77, 79, 0.1); border-radius: var(--radius-sm); color: var(--error-color);">
+                    ⚠️ 账户已过期！<a href="/Home/Settings" style="color: var(--accent-color);">点击续费</a>
+                </div>`;
+            }
+            
+            document.getElementById('userInfo').innerHTML = `
+                <div class="info-item">
+                    <span class="label">用户名</span>
+                    <span class="value">${userInfo.userName || 'N/A'}</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">到期时间</span>
+                    <span class="value" style="color: ${isExpired ? 'var(--error-color)' : 'var(--success-color)'}">
+                        ${expireDate ? expireDate.toLocaleString('zh-CN') : 'N/A'}
+                    </span>
+                </div>
+                ${expiredWarning}
+            `;
+        } catch (error) {
+            console.error('加载用户信息失败:', error);
+        }
+    }
+    
+    async function loadStats() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/betorder/list?page=1&size=100`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                if (result.success && result.data) {
+                    const today = new Date().toDateString();
+                    const todayOrders = result.data.filter(order => 
+                        new Date(order.betTime).toDateString() === today
+                    );
+                    
+                    document.getElementById('todayOrders').textContent = todayOrders.length;
+                    
+                    const todayProfit = todayOrders.reduce((sum, order) => sum + (order.profit || 0), 0);
+                    const profitElement = document.getElementById('todayProfit');
+                    profitElement.textContent = todayProfit.toFixed(2);
+                    profitElement.style.color = todayProfit >= 0 ? 'var(--success-color)' : 'var(--error-color)';
+                }
+            }
+        } catch (error) {
+            console.error('加载统计数据失败:', error);
+        }
+    }
+    
+    async function resetData() {
+        if (!confirm('⚠️ 确定要重置所有数据吗？\n\n这将清除：\n• 所有投注记录\n• 用户盈亏数据\n• 方案盈亏数据\n\n此操作无法撤销！')) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`${API_BASE_URL}/user/reset-data`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const result = await response.json();
+            
+            if (result.success) {
+                alert(`✅ ${result.message}`);
+                // 刷新页面数据
+                loadBotStatus();
+                loadStats();
+            } else {
+                alert(`❌ ${result.message}`);
+            }
+        } catch (error) {
+            console.error('重置数据失败:', error);
+            alert('重置数据失败：' + error.message);
+        }
+    }
+    
+    function logout() {
+        localStorage.removeItem('token');
+        localStorage.removeItem('userName');
+        localStorage.removeItem('userInfo');
+        window.location.href = '/Home/Login';
+    }
+</script>
+}

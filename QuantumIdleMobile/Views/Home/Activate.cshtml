@@ -1,0 +1,86 @@
+@{
+    ViewData["Title"] = "激活卡密";
+    Layout = "_Layout";
+}
+
+<div class="auth-container">
+    <div class="auth-card">
+        <div class="auth-logo">
+            <h1>🔑 激活卡密</h1>
+            <p>输入用户名和卡密激活账户</p>
+        </div>
+        
+        <form id="activateForm">
+            <div class="form-group">
+                <label for="username">用户名</label>
+                <input type="text" id="username" name="username" class="form-input" 
+                       placeholder="请输入用户名" required />
+            </div>
+            
+            <div class="form-group">
+                <label for="cardCode">卡密</label>
+                <input type="text" id="cardCode" name="cardCode" class="form-input" 
+                       placeholder="请输入卡密" required />
+            </div>
+            
+            <div class="form-group">
+                <button type="submit" class="btn btn-primary btn-block" id="activateBtn">
+                    激活
+                </button>
+            </div>
+            
+            <div id="resultMessage" style="display: none; margin-top: 12px;"></div>
+        </form>
+        
+        <div class="auth-footer">
+            <a href="/Home/Login">← 返回登录</a>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    const port = 5000;
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    const API_BASE_URL = `${protocol}//${hostname}:${port}/api`;
+
+    document.getElementById('activateForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const username = document.getElementById('username').value.trim();
+        const cardCode = document.getElementById('cardCode').value.trim();
+        const resultDiv = document.getElementById('resultMessage');
+        const btn = document.getElementById('activateBtn');
+        
+        btn.disabled = true;
+        btn.textContent = '激活中...';
+        resultDiv.style.display = 'none';
+        
+        try {
+            const response = await fetch(`${API_BASE_URL}/cardkey/activate`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ userName: username, cardCode: cardCode })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                resultDiv.innerHTML = `<div style="color: var(--success-color); padding: 12px; background: rgba(82, 196, 26, 0.1); border-radius: var(--radius-sm);">✅ ${result.message}</div>`;
+            } else {
+                resultDiv.innerHTML = `<div style="color: var(--error-color); padding: 12px; background: rgba(255, 77, 79, 0.1); border-radius: var(--radius-sm);">❌ ${result.message}</div>`;
+            }
+            resultDiv.style.display = 'block';
+        } catch (error) {
+            resultDiv.innerHTML = `<div style="color: var(--error-color); padding: 12px; background: rgba(255, 77, 79, 0.1); border-radius: var(--radius-sm);">❌ 网络错误</div>`;
+            resultDiv.style.display = 'block';
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '激活';
+        }
+    });
+</script>
+}

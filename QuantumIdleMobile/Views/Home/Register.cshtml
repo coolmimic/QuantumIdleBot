@@ -1,0 +1,133 @@
+@{
+    ViewData["Title"] = "注册";
+    Layout = "_Layout";
+}
+
+<div class="auth-container">
+    <div class="auth-card">
+        <div class="auth-logo">
+            <h1>⚡ 量子挂机</h1>
+            <p>创建新账户</p>
+        </div>
+        
+        <form id="registerForm">
+            <div class="form-group">
+                <label for="username">用户名</label>
+                <input type="text" id="username" name="username" class="form-input" 
+                       placeholder="请输入用户名" required autocomplete="username" />
+            </div>
+            
+            <div class="form-group">
+                <label for="password">密码</label>
+                <input type="password" id="password" name="password" class="form-input" 
+                       placeholder="请输入密码（至少6位）" required autocomplete="new-password" />
+            </div>
+            
+            <div class="form-group">
+                <label for="confirmPassword">确认密码</label>
+                <input type="password" id="confirmPassword" name="confirmPassword" class="form-input" 
+                       placeholder="请再次输入密码" required autocomplete="new-password" />
+            </div>
+            
+            <div class="form-group">
+                <button type="submit" class="btn btn-primary btn-block" id="registerBtn">
+                    注册
+                </button>
+            </div>
+            
+            <div id="errorMessage" class="error-message" style="display: none;"></div>
+            <div id="successMessage" class="success-message" style="display: none;"></div>
+        </form>
+        
+        <div class="auth-footer">
+            已有账号？<a href="/Home/Login">立即登录</a>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    const port = 5000;
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    const API_BASE_URL = `${protocol}//${hostname}:${port}/api`;
+    
+    let isSubmitting = false;
+
+    document.getElementById('registerForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        if (isSubmitting) return;
+        
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value;
+        const confirmPassword = document.getElementById('confirmPassword').value;
+        const errorDiv = document.getElementById('errorMessage');
+        const successDiv = document.getElementById('successMessage');
+        const registerBtn = document.getElementById('registerBtn');
+        const originalBtnText = registerBtn.textContent;
+        
+        errorDiv.style.display = 'none';
+        successDiv.style.display = 'none';
+        
+        // 验证用户名长度
+        if (username.length < 3) {
+            errorDiv.textContent = '用户名长度至少为3位';
+            errorDiv.style.display = 'block';
+            return;
+        }
+        
+        // 验证密码长度
+        if (password.length < 6) {
+            errorDiv.textContent = '密码长度至少为6位';
+            errorDiv.style.display = 'block';
+            return;
+        }
+        
+        // 验证密码是否一致
+        if (password !== confirmPassword) {
+            errorDiv.textContent = '两次输入的密码不一致';
+            errorDiv.style.display = 'block';
+            return;
+        }
+        
+        isSubmitting = true;
+        registerBtn.disabled = true;
+        registerBtn.textContent = '注册中...';
+        
+        try {
+            const response = await fetch(`${API_BASE_URL}/user/register`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ userName: username, password: password })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                successDiv.textContent = '🎉 注册成功！正在跳转到登录页面...';
+                successDiv.style.display = 'block';
+                
+                // 2秒后跳转到登录页
+                setTimeout(() => {
+                    window.location.href = '/Home/Login';
+                }, 1500);
+            } else {
+                errorDiv.textContent = result.message || '注册失败';
+                errorDiv.style.display = 'block';
+                registerBtn.disabled = false;
+                registerBtn.textContent = originalBtnText;
+                isSubmitting = false;
+            }
+        } catch (error) {
+            errorDiv.textContent = '网络错误，请稍后重试';
+            errorDiv.style.display = 'block';
+            registerBtn.disabled = false;
+            registerBtn.textContent = originalBtnText;
+            isSubmitting = false;
+        }
+    });
+</script>
+}

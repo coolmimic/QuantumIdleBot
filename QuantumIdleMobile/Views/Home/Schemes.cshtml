@@ -1,0 +1,320 @@
+@{
+    ViewData["Title"] = "方案管理";
+}
+
+<div class="page-container">
+    <div class="header">
+        <h1>📋 方案管理</h1>
+        <div class="header-actions">
+            <button class="btn-icon" onclick="refreshSchemes()">刷新</button>
+            <a href="/Home/SchemeEdit" class="btn btn-primary">+ 新建</a>
+        </div>
+    </div>
+    
+    <div class="content">
+        <div class="schemes-list" id="schemesList">
+            <div class="loading-state">
+                <div class="spinner"></div>
+                <p>加载中...</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="bottom-nav">
+        <a href="/Home/Dashboard" class="nav-item">
+            <span class="nav-icon">🏠</span>
+            <span class="nav-text">首页</span>
+        </a>
+        <a href="/Home/Telegram" class="nav-item">
+            <span class="nav-icon">📱</span>
+            <span class="nav-text">TG连接</span>
+        </a>
+        <a href="/Home/Schemes" class="nav-item active">
+            <span class="nav-icon">📋</span>
+            <span class="nav-text">方案</span>
+        </a>
+        <a href="/Home/History" class="nav-item">
+            <span class="nav-icon">📊</span>
+            <span class="nav-text">历史</span>
+        </a>
+        <a href="/Home/Settings" class="nav-item">
+            <span class="nav-icon">⚙️</span>
+            <span class="nav-text">设置</span>
+        </a>
+    </div>
+</div>
+
+<style>
+    .schemes-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .loading-state, .empty-state, .error-state {
+        text-align: center;
+        padding: 40px 20px;
+        color: var(--text-secondary);
+    }
+    .loading-state .spinner {
+        width: 32px;
+        height: 32px;
+        border: 3px solid rgba(255, 255, 255, 0.2);
+        border-top-color: var(--accent-color);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin: 0 auto 12px;
+    }
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+    
+    .scheme-item {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        padding: 12px;
+        border-left: 3px solid var(--text-tertiary);
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .scheme-item:hover {
+        background: var(--bg-tertiary);
+    }
+    .scheme-item.enabled {
+        border-left-color: var(--success-color);
+    }
+    .scheme-item.disabled {
+        border-left-color: var(--error-color);
+        opacity: 0.7;
+    }
+    
+    .scheme-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+    .scheme-name {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+    .scheme-actions {
+        display: flex;
+        gap: 6px;
+    }
+    .btn-icon-small {
+        width: 28px;
+        height: 28px;
+        border: none;
+        background: var(--bg-tertiary);
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .btn-icon-small:hover {
+        background: var(--bg-primary);
+    }
+    
+    .scheme-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+    }
+    .scheme-field {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .scheme-field .label {
+        font-size: 11px;
+        color: var(--text-tertiary);
+    }
+    .scheme-field .value {
+        font-size: 13px;
+        color: var(--text-primary);
+        font-weight: 500;
+    }
+    .scheme-field .value.profit-positive {
+        color: var(--success-color);
+    }
+    .scheme-field .value.profit-negative {
+        color: var(--error-color);
+    }
+</style>
+
+@section Scripts {
+<script>
+    const port = 5000;
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    const API_BASE_URL = `${protocol}//${hostname}:${port}/api`;
+    const token = localStorage.getItem('token');
+    
+    if (!token) {
+        window.location.href = '/Home/Login';
+    }
+
+    // 游戏类型映射
+    const gameTypeMap = {
+        0: '扫雷', 1: '快三', 2: '28', 3: '20', 4: '时彩'
+    };
+
+    // 出号规则映射
+    const drawRuleMap = {
+        0: '固定', 1: '开某投某', 2: '龙虎',
+        3: '走势', 4: '01形态', 5: '分支', 6: '跟随'
+    };
+    
+    // 倍率类型映射
+    const oddsTypeMap = {
+        0: '直线'
+    };
+
+    document.addEventListener('DOMContentLoaded', loadSchemes);
+
+    // 截取群组名（最多6个字符）
+    function formatGroupName(name) {
+        if (!name) return '-';
+        return name.length > 6 ? name.substring(0, 6) + '..' : name;
+    }
+    
+    // 格式化盈亏
+    function formatProfit(value) {
+        const v = value || 0;
+        const cls = v >= 0 ? 'profit-positive' : 'profit-negative';
+        const prefix = v >= 0 ? '+' : '';
+        return `<span class="value ${cls}">${prefix}${v.toFixed(2)}</span>`;
+    }
+
+    async function loadSchemes() {
+        const container = document.getElementById('schemesList');
+        container.innerHTML = `
+            <div class="loading-state">
+                <div class="spinner"></div>
+                <p>加载中...</p>
+            </div>
+        `;
+        
+        try {
+            const response = await fetch(`${API_BASE_URL}/scheme`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success && result.data) {
+                displaySchemes(result.data);
+            } else {
+                container.innerHTML = '<div class="error-state">加载失败</div>';
+            }
+        } catch (error) {
+            console.error('加载方案失败:', error);
+            container.innerHTML = '<div class="error-state">网络错误</div>';
+        }
+    }
+
+    function displaySchemes(schemes) {
+        const container = document.getElementById('schemesList');
+        
+        if (schemes.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <p style="margin-bottom: 16px;">📭 暂无方案</p>
+                    <a href="/Home/SchemeEdit" class="btn btn-primary">创建第一个方案</a>
+                </div>
+            `;
+            return;
+        }
+
+        let html = '';
+        schemes.forEach(s => {
+            const gameTypeName = gameTypeMap[s.gameType] || '?';
+            const drawRuleName = drawRuleMap[s.drawRule] || '?';
+            const oddsTypeName = oddsTypeMap[s.oddsType] || '?';
+            const groupName = formatGroupName(s.tgGroupName);
+            
+            html += `
+                <div class="scheme-item ${s.isEnabled ? 'enabled' : 'disabled'}" onclick="editScheme(${s.id})">
+                    <div class="scheme-header">
+                        <div class="scheme-name">${s.name}</div>
+                        <div class="scheme-actions" onclick="event.stopPropagation();">
+                            <button class="btn-icon-small" onclick="toggleScheme(${s.id})" title="${s.isEnabled ? '禁用' : '启用'}">
+                                ${s.isEnabled ? '⏸' : '▶'}
+                            </button>
+                            <button class="btn-icon-small" onclick="deleteScheme(${s.id})" title="删除">🗑️</button>
+                        </div>
+                    </div>
+                    <div class="scheme-grid">
+                        <div class="scheme-field">
+                            <span class="label">群组</span>
+                            <span class="value">${groupName}</span>
+                        </div>
+                        <div class="scheme-field">
+                            <span class="label">游戏</span>
+                            <span class="value">${gameTypeName}</span>
+                        </div>
+                        <div class="scheme-field">
+                            <span class="label">规则</span>
+                            <span class="value">${drawRuleName}/${oddsTypeName}</span>
+                        </div>
+                        <div class="scheme-field">
+                            <span class="label">实盘盈亏</span>
+                            ${formatProfit(s.profit)}
+                        </div>
+                        <div class="scheme-field">
+                            <span class="label">模拟盈亏</span>
+                            ${formatProfit(s.simProfit)}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        container.innerHTML = html;
+    }
+
+    function editScheme(id) {
+        window.location.href = `/Home/SchemeEdit?id=${id}`;
+    }
+
+    async function toggleScheme(id) {
+        try {
+            const response = await fetch(`${API_BASE_URL}/scheme/${id}/toggle`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (response.ok) {
+                loadSchemes();
+            }
+        } catch (error) {
+            console.error('切换状态失败:', error);
+        }
+    }
+
+    async function deleteScheme(id) {
+        if (!confirm('确定要删除这个方案吗？')) return;
+        
+        try {
+            const response = await fetch(`${API_BASE_URL}/scheme/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (response.ok) {
+                loadSchemes();
+            }
+        } catch (error) {
+            console.error('删除方案失败:', error);
+        }
+    }
+
+    function refreshSchemes() {
+        loadSchemes();
+    }
+</script>
+}

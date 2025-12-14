@@ -1,0 +1,135 @@
+@{
+    ViewData["Title"] = "登录";
+    Layout = "_Layout";
+}
+
+<div class="auth-container">
+    <div class="auth-card">
+        <div class="auth-logo">
+            <h1>⚡ 量子挂机</h1>
+            <p>Quantum Idle Bot</p>
+        </div>
+        
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="username">用户名</label>
+                <input type="text" id="username" name="username" class="form-input" 
+                       placeholder="请输入用户名" required autocomplete="username" />
+            </div>
+            
+            <div class="form-group">
+                <label for="password">密码</label>
+                <input type="password" id="password" name="password" class="form-input" 
+                       placeholder="请输入密码" required autocomplete="current-password" />
+            </div>
+            
+            <div class="form-group">
+                <button type="submit" class="btn btn-primary btn-block" id="loginBtn">
+                    登录
+                </button>
+            </div>
+            
+            <div id="errorMessage" class="error-message" style="display: none;"></div>
+        </form>
+        
+        <div class="auth-footer">
+            <div class="auth-links">
+                <a href="/Home/Register">📝 注册账号</a>
+                <span class="divider">|</span>
+                <a href="/Home/Activate">🔑 激活卡密</a>
+                <span class="divider">|</span>
+                <a href="/Home/ResetPassword">🔄 重置密码</a>
+            </div>
+            <div class="admin-link" style="margin-top: 16px;">
+                <a href="/Home/AdminCard" style="color: var(--text-tertiary); font-size: 12px;">管理员入口</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .auth-links {
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .auth-links a {
+        color: var(--accent-color);
+        text-decoration: none;
+        font-size: 14px;
+    }
+    .auth-links a:hover {
+        text-decoration: underline;
+    }
+    .auth-links .divider {
+        color: var(--text-tertiary);
+    }
+</style>
+
+@section Scripts {
+<script>
+    const port = 5000;
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    const API_BASE_URL = `${protocol}//${hostname}:${port}/api`;
+    
+    // 检查是否已登录
+    const existingToken = localStorage.getItem('token');
+    if (existingToken) {
+        window.location.href = '/Home/Dashboard';
+    }
+    
+    let isSubmitting = false;
+
+    document.getElementById('loginForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        if (isSubmitting) return;
+
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value;
+        const errorDiv = document.getElementById('errorMessage');
+        const loginBtn = document.getElementById('loginBtn');
+        const originalBtnText = loginBtn.textContent;
+        
+        errorDiv.style.display = 'none';
+        
+        isSubmitting = true;
+        loginBtn.disabled = true;
+        loginBtn.textContent = '登录中...';
+        
+        try {
+            const response = await fetch(`${API_BASE_URL}/user/login`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ userName: username, password: password })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                // 保存 token 和用户信息
+                localStorage.setItem('token', result.data.token);
+                localStorage.setItem('userName', result.data.userName);
+                localStorage.setItem('userInfo', JSON.stringify(result.data));
+                
+                // 跳转到仪表板
+                window.location.href = '/Home/Dashboard';
+            } else {
+                errorDiv.textContent = result.message || '登录失败';
+                errorDiv.style.display = 'block';
+            }
+        } catch (error) {
+            errorDiv.textContent = '网络错误，请稍后重试';
+            errorDiv.style.display = 'block';
+        } finally {
+            loginBtn.disabled = false;
+            loginBtn.textContent = originalBtnText;
+            isSubmitting = false;
+        }
+    });
+</script>
+}

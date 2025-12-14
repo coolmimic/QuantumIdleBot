@@ -1,0 +1,17 @@
+[
+  {
+    "CategoryId": "MS_BASIC",
+    "Name": "基础玩法",
+    "Description": "扫雷游戏中的主要押注模式，采用虚拟分类层。",
+    "PlayModes": [
+      {
+        "ModeId": "MSB_ODDEVEN",
+        "Name": "大小单双"
+      },
+      {
+        "ModeId": "MSB_NUMBER",
+        "Name": "数字"
+      }
+    ]
+  }
+]

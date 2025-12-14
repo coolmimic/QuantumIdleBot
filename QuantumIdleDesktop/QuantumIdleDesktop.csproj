@@ -1,0 +1,62 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>WinExe</OutputType>
+		<TargetFramework>net10.0-windows</TargetFramework>
+		<Nullable>enable</Nullable>
+		<UseWindowsForms>true</UseWindowsForms>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<ApplicationIcon>xingxing.ico</ApplicationIcon>
+		<AssemblyName>量子挂机</AssemblyName>
+
+
+		<PublishSingleFile>true</PublishSingleFile>
+
+		<IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+
+		<SelfContained>true</SelfContained>
+
+		<RuntimeIdentifier>win-x64</RuntimeIdentifier>
+
+		<PublishTrimmed>false</PublishTrimmed>
+
+		<FileVersion>1.0.0.1</FileVersion>
+
+		<AssemblyVersion>1.0.1.3</AssemblyVersion>
+
+	</PropertyGroup>
+
+	<ItemGroup>
+		<Content Include="Data\**\*">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+			<ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+		</Content>
+	</ItemGroup>
+
+	<!-- NuGet 包 -->
+	<ItemGroup>
+		<PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.0" />
+		<PackageReference Include="WTelegramClient" Version="4.3.14" />
+	</ItemGroup>
+
+	<!-- 项目引用 -->
+	<ItemGroup>
+		<ProjectReference Include="..\QuantumIdleModels\QuantumIdleModels.csproj" />
+	</ItemGroup>
+	<ItemGroup>
+	  <Folder Include="Models\enum\" />
+	</ItemGroup>
+
+	<Target Name="CopyUpdater" AfterTargets="Publish">
+		<Message Text="正在集成自动更新程序..." Importance="high" />
+
+		<PropertyGroup>
+			<UpdaterSource>..\QuantumIdleUpdater\bin\Release\net10.0-windows\publish\QuantumIdleUpdater.exe</UpdaterSource>
+		</PropertyGroup>
+
+		<Copy SourceFiles="$(UpdaterSource)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
+
+	</Target>
+
+</Project>

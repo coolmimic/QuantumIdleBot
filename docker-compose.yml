@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  # SQL Server 数据库
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: quantumidle-db
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=YourStrong@Passw0rd
+      - MSSQL_PID=Express
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    restart: unless-stopped
+
+  # WEB API 服务
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: quantumidle-web
+    environment:
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=QuantumIdleBot;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+    ports:
+      - "5000:5000"
+    volumes:
+      - telegram_sessions:/app/TelegramSessions
+    depends_on:
+      - sqlserver
+    restart: unless-stopped
+
+  # Mobile 前端服务
+  mobile:
+    build:
+      context: .
+      dockerfile: Dockerfile.mobile
+    container_name: quantumidle-mobile
+    ports:
+      - "5001:5001"
+    depends_on:
+      - web
+    restart: unless-stopped
+
+  # Nginx 反向代理（可选，用于80端口）
+  nginx:
+    image: nginx:alpine
+    container_name: quantumidle-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - mobile
+      - web
+    restart: unless-stopped
+
+volumes:
+  sqlserver_data:
+  telegram_sessions:

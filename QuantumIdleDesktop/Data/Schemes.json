@@ -1,0 +1,56 @@
+[
+  {
+    "Id": "5b30a85d-3d77-4ad7-b07e-df8806a0d969",
+    "Name": "方案 1",
+    "TgGroupName": "公群811 · 押金20000U 渤海满倍扫雷",
+    "TgGroupId": 2755463171,
+    "GameType": "Minesweeper",
+    "PlayMode": "BigSmall",
+    "OddsType": 0,
+    "OddsConfig": {
+      "$type": "linear",
+      "Type": "Linear",
+      "Sequence": [
+        1
+      ]
+    },
+    "DrawRule": 0,
+    "DrawRuleConfig": {
+      "$type": "fixed_number",
+      "Type": "Fixed",
+      "TargetNumbers": [
+        "大"
+      ]
+    },
+    "EnableStopProfitLoss": true,
+    "StopProfitAmount": 0,
+    "StopLossAmount": 0
+  },
+  {
+    "Id": "a5a8bb9d-694d-45dc-80a6-86749da61a70",
+    "Name": "方案 2",
+    "TgGroupName": "公群811 · 押金20000U 渤海满倍扫雷",
+    "TgGroupId": 2755463171,
+    "GameType": "Minesweeper",
+    "PlayMode": "OddEven",
+    "OddsType": 0,
+    "OddsConfig": {
+      "$type": "linear",
+      "Type": "Linear",
+      "Sequence": [
+        1
+      ]
+    },
+    "DrawRule": 0,
+    "DrawRuleConfig": {
+      "$type": "fixed_number",
+      "Type": "Fixed",
+      "TargetNumbers": [
+        "单"
+      ]
+    },
+    "EnableStopProfitLoss": true,
+    "StopProfitAmount": 0,
+    "StopLossAmount": 0
+  }
+]

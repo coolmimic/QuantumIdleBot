@@ -1,0 +1,24 @@
+# 使用 .NET 10 SDK 构建
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+
+# 复制项目文件
+COPY QuantumIdleModels/ QuantumIdleModels/
+COPY QuantumIdleWEB/ QuantumIdleWEB/
+
+# 还原和发布
+RUN dotnet publish QuantumIdleWEB/QuantumIdleWEB.csproj -c Release -o /app
+
+# 运行时镜像
+FROM mcr.microsoft.com/dotnet/aspnet:10.0
+WORKDIR /app
+COPY --from=build /app .
+
+# 创建 Telegram 会话目录
+RUN mkdir -p /app/TelegramSessions
+
+EXPOSE 5000
+ENV ASPNETCORE_URLS=http://+:5000
+ENV ASPNETCORE_ENVIRONMENT=Production
+
+ENTRYPOINT ["dotnet", "QuantumIdleWEB.dll"]

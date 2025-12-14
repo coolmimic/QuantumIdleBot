@@ -1,0 +1,367 @@
+@{
+    ViewData["Title"] = "Telegram 连接";
+}
+
+<div class="page-container">
+    <div class="header">
+        <h1>📱 Telegram 连接</h1>
+    </div>
+    
+    <div class="content">
+        <div class="card">
+            <h3>连接状态</h3>
+            <div id="connectionStatus" class="status-info">
+                <p>检查中...</p>
+            </div>
+        </div>
+
+        <div class="card" id="loginSection" style="display: none;">
+            <h3>登录 Telegram</h3>
+            
+            <!-- 已存在的 session 快速选择 -->
+            <div id="existingSessionsDiv" style="display: none; margin-bottom: 16px;">
+                <label style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; display: block;">快速登录（已保存的账号）</label>
+                <select id="existingSessions" class="form-input" onchange="selectExistingSession()">
+                    <option value="">选择已保存的手机号...</option>
+                </select>
+            </div>
+            
+            <form id="tgLoginForm">
+                <div class="form-group">
+                    <label for="phoneNumber">手机号</label>
+                    <input type="tel" id="phoneNumber" class="form-input" 
+                           placeholder="+86 13800138000" required />
+                </div>
+                <div class="form-group">
+                    <button type="submit" class="btn btn-primary btn-block" id="initBtn">
+                        初始化连接
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div class="card" id="authSection" style="display: none;">
+            <h3 id="authTitle">输入验证码</h3>
+            <form id="authForm">
+                <div class="form-group">
+                    <label id="authLabel" for="authCode">验证码</label>
+                    <input type="text" id="authCode" class="form-input" 
+                           placeholder="请输入验证码" required autocomplete="one-time-code" />
+                </div>
+                <div class="form-group" style="display: flex; gap: 10px;">
+                    <button type="submit" class="btn btn-primary" style="flex: 1;" id="authBtn">提交</button>
+                    <button type="button" class="btn btn-secondary" onclick="cancelAuth()">取消</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="card" id="chatsSection" style="display: none;">
+            <h3>群组列表</h3>
+            <div id="chatsList" class="chats-list">
+                <div class="loading">加载中...</div>
+            </div>
+        </div>
+
+        <div class="card" id="actionsSection" style="display: none;">
+            <h3>操作</h3>
+            <button class="btn btn-danger btn-block" onclick="disconnect()">
+                断开连接
+            </button>
+        </div>
+
+        <div id="errorMessage" class="error-message" style="display: none;"></div>
+    </div>
+    
+    <div class="bottom-nav">
+        <a href="/Home/Dashboard" class="nav-item">
+            <span class="nav-icon">🏠</span>
+            <span class="nav-text">首页</span>
+        </a>
+        <a href="/Home/Telegram" class="nav-item active">
+            <span class="nav-icon">📱</span>
+            <span class="nav-text">TG连接</span>
+        </a>
+        <a href="/Home/Schemes" class="nav-item">
+            <span class="nav-icon">📋</span>
+            <span class="nav-text">方案</span>
+        </a>
+        <a href="/Home/History" class="nav-item">
+            <span class="nav-icon">📊</span>
+            <span class="nav-text">历史</span>
+        </a>
+        <a href="/Home/Settings" class="nav-item">
+            <span class="nav-icon">⚙️</span>
+            <span class="nav-text">设置</span>
+        </a>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    const port = 5000;
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    const API_BASE_URL = `${protocol}//${hostname}:${port}/api`;
+    const token = localStorage.getItem('token');
+    
+    if (!token) {
+        window.location.href = '/Home/Login';
+    }
+
+    let currentAuthType = null;
+
+    // 页面加载时检查状态和获取已存在的 session
+    document.addEventListener('DOMContentLoaded', async function() {
+        await checkStatus();
+        await loadExistingSessions();
+    });
+
+    async function loadExistingSessions() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/telegram/sessions`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success && result.data && result.data.length > 0) {
+                const select = document.getElementById('existingSessions');
+                select.innerHTML = '<option value="">选择已保存的手机号...</option>';
+                
+                result.data.forEach(phone => {
+                    const option = document.createElement('option');
+                    option.value = phone;
+                    option.textContent = phone;
+                    select.appendChild(option);
+                });
+                
+                document.getElementById('existingSessionsDiv').style.display = 'block';
+                
+                // 自动预填充第一个手机号
+                if (result.data.length === 1) {
+                    document.getElementById('phoneNumber').value = result.data[0];
+                }
+            }
+        } catch (error) {
+            console.error('加载已存在的 session 失败:', error);
+        }
+    }
+
+    function selectExistingSession() {
+        const select = document.getElementById('existingSessions');
+        if (select.value) {
+            document.getElementById('phoneNumber').value = select.value;
+        }
+    }
+
+    async function checkStatus() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/telegram/status`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                if (result.isConnected) {
+                    document.getElementById('connectionStatus').innerHTML = 
+                        '<p style="color: var(--success-color);">✅ 已连接</p>';
+                    document.getElementById('loginSection').style.display = 'none';
+                    document.getElementById('chatsSection').style.display = 'block';
+                    document.getElementById('actionsSection').style.display = 'block';
+                    loadChats();
+                } else {
+                    document.getElementById('connectionStatus').innerHTML = 
+                        '<p style="color: var(--warning-color);">⚠️ 未连接</p>';
+                    document.getElementById('loginSection').style.display = 'block';
+                    document.getElementById('chatsSection').style.display = 'none';
+                    document.getElementById('actionsSection').style.display = 'none';
+                }
+            }
+        } catch (error) {
+            document.getElementById('connectionStatus').innerHTML = 
+                '<p style="color: var(--error-color);">❌ 检查状态失败</p>';
+        }
+    }
+
+    async function loadChats() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/telegram/chats`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success && result.data) {
+                let html = '';
+                result.data.forEach(chat => {
+                    html += `
+                        <div class="chat-item">
+                            <div class="chat-name">${chat.name}</div>
+                            <div class="chat-type">${chat.isChannel ? '频道' : '群组'}</div>
+                        </div>
+                    `;
+                });
+                document.getElementById('chatsList').innerHTML = html || '<div class="empty-state">暂无群组</div>';
+            }
+        } catch (error) {
+            document.getElementById('chatsList').innerHTML = '<div class="error-state">加载失败</div>';
+        }
+    }
+
+    document.getElementById('tgLoginForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const phoneNumber = document.getElementById('phoneNumber').value;
+        const errorDiv = document.getElementById('errorMessage');
+        const submitBtn = document.getElementById('initBtn');
+        const originalBtnText = submitBtn.textContent;
+        
+        // 验证手机号格式
+        const phoneRegex = /^\+?[0-9]{10,15}$/;
+        if (!phoneRegex.test(phoneNumber.replace(/[\s\-\(\)]/g, ''))) {
+            errorDiv.textContent = '请输入有效的手机号格式（如：+86 13800138000）';
+            errorDiv.style.display = 'block';
+            return;
+        }
+        
+        errorDiv.style.display = 'none';
+        submitBtn.disabled = true;
+        submitBtn.textContent = '连接中...';
+        
+        try {
+            const response = await fetch(`${API_BASE_URL}/telegram/initialize`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ phoneNumber: phoneNumber })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                checkStatus();
+            } else if (result.requiresAuth) {
+                currentAuthType = result.authType;
+                showAuthForm(result.authType, result.message);
+            } else {
+                errorDiv.textContent = result.message || '初始化失败';
+                errorDiv.style.display = 'block';
+            }
+        } catch (error) {
+            errorDiv.textContent = '网络错误，请稍后重试';
+            errorDiv.style.display = 'block';
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalBtnText;
+        }
+    });
+
+    document.getElementById('authForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const code = document.getElementById('authCode').value;
+        const errorDiv = document.getElementById('errorMessage');
+        const submitBtn = document.getElementById('authBtn');
+        const originalBtnText = submitBtn.textContent;
+        
+        errorDiv.style.display = 'none';
+        submitBtn.disabled = true;
+        submitBtn.textContent = '验证中...';
+        
+        try {
+            const response = await fetch(`${API_BASE_URL}/telegram/submit-auth`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ code: code })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                hideAuthForm();
+                checkStatus();
+            } else if (result.requiresAuth) {
+                if (result.authType && result.authType !== currentAuthType) {
+                    currentAuthType = result.authType;
+                    showAuthForm(result.authType, result.message);
+                } else {
+                    errorDiv.textContent = result.message || '验证码或密码错误，请重试';
+                    errorDiv.style.display = 'block';
+                }
+                document.getElementById('authCode').value = '';
+            } else {
+                errorDiv.textContent = result.message || '认证失败';
+                errorDiv.style.display = 'block';
+            }
+        } catch (error) {
+            errorDiv.textContent = '网络错误，请稍后重试';
+            errorDiv.style.display = 'block';
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalBtnText;
+        }
+    });
+
+    function showAuthForm(authType, message) {
+        const authSection = document.getElementById('authSection');
+        const authTitle = document.getElementById('authTitle');
+        const authLabel = document.getElementById('authLabel');
+        const authCodeInput = document.getElementById('authCode');
+        const errorDiv = document.getElementById('errorMessage');
+        
+        authTitle.textContent = authType === 'password' ? '🔐 输入密码' : '🔢 输入验证码';
+        authLabel.textContent = authType === 'password' ? '两步验证密码' : '验证码';
+        authCodeInput.placeholder = authType === 'password' ? '请输入您的两步验证密码' : '请输入 Telegram 发送的验证码';
+        authCodeInput.type = authType === 'password' ? 'password' : 'text';
+        
+        document.getElementById('loginSection').style.display = 'none';
+        authSection.style.display = 'block';
+        authCodeInput.focus();
+        
+        // 清空之前的错误信息
+        errorDiv.style.display = 'none';
+    }
+
+    function hideAuthForm() {
+        document.getElementById('authSection').style.display = 'none';
+        document.getElementById('authCode').value = '';
+        document.getElementById('errorMessage').style.display = 'none';
+        currentAuthType = null;
+    }
+
+    function cancelAuth() {
+        hideAuthForm();
+        document.getElementById('loginSection').style.display = 'block';
+    }
+
+    async function disconnect() {
+        if (!confirm('确定要断开 Telegram 连接吗？')) return;
+        
+        try {
+            const response = await fetch(`${API_BASE_URL}/telegram/disconnect`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                checkStatus();
+            }
+        } catch (error) {
+            alert('断开连接失败');
+        }
+    }
+</script>
+}

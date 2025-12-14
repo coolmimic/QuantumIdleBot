@@ -1,0 +1,1070 @@
+@{
+    ViewData["Title"] = ViewData["SchemeId"] != null ? "编辑方案" : "新建方案";
+    var schemeId = ViewData["SchemeId"];
+}
+
+<div class="page-container">
+    <div class="header">
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <button class="btn-icon" onclick="goBack()">←</button>
+            <h1>@(schemeId != null ? "编辑方案" : "新建方案")</h1>
+        </div>
+        <button class="btn btn-primary" onclick="saveScheme()" id="saveBtn">保存</button>
+    </div>
+    
+    <div class="content">
+        <!-- 加载遮罩层 -->
+        <div id="loadingOverlay" class="loading-overlay">
+            <div class="loading-content">
+                <div class="spinner"></div>
+                <p>正在加载数据...</p>
+            </div>
+        </div>
+        
+        <input type="hidden" id="schemeId" value="@schemeId" />
+        
+        <!-- 基本信息 -->
+        <div class="card">
+            <h3>基本信息</h3>
+            <div class="form-group">
+                <label for="schemeName">方案名称 *</label>
+                <input type="text" id="schemeName" class="form-input" placeholder="请输入方案名称" required />
+            </div>
+            
+            <div class="form-group">
+                <label for="tgGroupSelect">Telegram 群组 *</label>
+                <div style="display: flex; gap: 8px;">
+                    <select id="tgGroupSelect" class="form-input" style="flex: 1;">
+                        <option value="">请选择群组...</option>
+                    </select>
+                    <button type="button" class="btn btn-secondary" onclick="refreshGroups()">刷新</button>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="isEnabled" checked />
+                    <span>启用方案</span>
+                </label>
+            </div>
+        </div>
+        
+        <!-- 游戏设置 -->
+        <div class="card">
+            <h3>游戏设置</h3>
+            <div class="form-group">
+                <label for="gameType">游戏类型</label>
+                <select id="gameType" class="form-input">
+                    <option value="0">扫雷</option>
+                    <option value="1">快三</option>
+                    <option value="2">加拿大28</option>
+                    <option value="3">加拿大20</option>
+                    <option value="4">时时彩</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="playMode">玩法模式</label>
+                <select id="playMode" class="form-input" onchange="updatePositionPanel()">
+                    <option value="0">大小单双</option>
+                    <option value="1">数字</option>
+                    <option value="301">组合</option>
+                    <option value="302">高倍</option>
+                    <option value="1100">定位胆</option>
+                    <option value="1102">定位大小单双</option>
+                    <option value="1202">龙虎</option>
+                    <option value="1203">和</option>
+                </select>
+            </div>
+            
+            <div class="form-group" id="positionGroup" style="display: none;">
+                <label>位置选择</label>
+                <div class="position-checkboxes">
+                    <label><input type="checkbox" name="position" value="0"><span>万</span></label>
+                    <label><input type="checkbox" name="position" value="1"><span>千</span></label>
+                    <label><input type="checkbox" name="position" value="2"><span>百</span></label>
+                    <label><input type="checkbox" name="position" value="3"><span>十</span></label>
+                    <label><input type="checkbox" name="position" value="4"><span>个</span></label>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 倍率配置（可折叠） -->
+        <div class="card collapsible-card">
+            <div class="card-header" onclick="togglePanel('oddsPanel')">
+                <div>
+                    <h3 style="margin: 0;">📈 倍率配置</h3>
+                    <p id="oddsPreview" class="card-preview">使用默认序列</p>
+                </div>
+                <span class="collapse-icon" id="oddsIcon">▼</span>
+            </div>
+            <div id="oddsPanel" class="collapsible-content" style="display: none;">
+                <div class="form-group">
+                    <label for="oddsType">倍率类型</label>
+                    <select id="oddsType" class="form-input">
+                        <option value="0">直线倍率</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="progressMode">递进模式</label>
+                    <select id="progressMode" class="form-input">
+                        <option value="0">挂了加倍（输后递增）</option>
+                        <option value="1">中了加倍（赢后递增）</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>倍投序列</label>
+                    <div id="sequenceList" style="display: flex; flex-direction: column; gap: 8px;"></div>
+                    <button type="button" class="btn btn-secondary" style="margin-top: 8px;" onclick="addSequenceItem()">+ 添加一关</button>
+                </div>
+                
+                <div style="padding: 12px; background: var(--bg-tertiary); border-radius: var(--radius-md); margin-top: 12px;">
+                    <h4 style="margin: 0 0 8px 0; font-size: 13px;">快速生成</h4>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <input type="number" id="quickStart" class="form-input" value="10" min="1" style="width: 80px;" placeholder="起始" />
+                        <select id="quickMultiplier" class="form-input" style="width: 80px;">
+                            <option value="1.5">×1.5</option>
+                            <option value="2" selected>×2</option>
+                            <option value="3">×3</option>
+                        </select>
+                        <input type="number" id="quickCount" class="form-input" value="10" min="1" max="50" style="width: 80px;" placeholder="关数" />
+                        <button class="btn btn-secondary" onclick="generateSequence()">生成</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 出号规则（可折叠） -->
+        <div class="card collapsible-card">
+            <div class="card-header" onclick="togglePanel('drawRulePanel')">
+                <div>
+                    <h3 style="margin: 0;">🎯 出号规则</h3>
+                    <p id="drawRulePreview" class="card-preview">未配置</p>
+                </div>
+                <span class="collapse-icon" id="drawRuleIcon">▼</span>
+            </div>
+            <div id="drawRulePanel" class="collapsible-content" style="display: none;">
+                <div class="form-group">
+                    <label for="drawRule">规则类型</label>
+                    <select id="drawRule" class="form-input" onchange="updateDrawRuleForm()">
+                        <option value="0">固定号码</option>
+                        <option value="1">开某投某</option>
+                        <option value="2">斩龙跟龙</option>
+                        <option value="3">号码走势</option>
+                        <option value="4">01形态</option>
+                        <option value="5">分支走势</option>
+                        <option value="6">结果跟随</option>
+                    </select>
+                </div>
+                
+                <!-- 规则表单容器 -->
+                <div id="drawRuleFormContainer"></div>
+            </div>
+        </div>
+        
+        <!-- 止盈止损 -->
+        <div class="card">
+            <h3>止盈止损</h3>
+            <div class="form-group">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="enableStopProfitLoss" onchange="toggleStopProfitLoss()" />
+                    <span>启用止盈止损</span>
+                </label>
+            </div>
+            
+            <div id="stopProfitLossGroup" style="display: none;">
+                <div class="form-group">
+                    <label for="stopProfitAmount">止盈金额</label>
+                    <input type="number" id="stopProfitAmount" class="form-input" step="0.01" placeholder="0.00" />
+                </div>
+                
+                <div class="form-group">
+                    <label for="stopLossAmount">止损金额</label>
+                    <input type="number" id="stopLossAmount" class="form-input" step="0.01" placeholder="0.00" />
+                </div>
+            </div>
+        </div>
+        
+        <!-- 删除按钮（仅编辑时显示） -->
+        <div class="card" id="deleteSection" style="display: none;">
+            <button class="btn btn-danger btn-block" onclick="deleteScheme()">删除方案</button>
+        </div>
+    </div>
+    
+    <div class="bottom-nav">
+        <a href="/Home/Dashboard" class="nav-item">
+            <span class="nav-icon">🏠</span>
+            <span class="nav-text">首页</span>
+        </a>
+        <a href="/Home/Telegram" class="nav-item">
+            <span class="nav-icon">📱</span>
+            <span class="nav-text">TG连接</span>
+        </a>
+        <a href="/Home/Schemes" class="nav-item active">
+            <span class="nav-icon">📋</span>
+            <span class="nav-text">方案</span>
+        </a>
+        <a href="/Home/History" class="nav-item">
+            <span class="nav-icon">📊</span>
+            <span class="nav-text">历史</span>
+        </a>
+        <a href="/Home/Settings" class="nav-item">
+            <span class="nav-icon">⚙️</span>
+            <span class="nav-text">设置</span>
+        </a>
+    </div>
+</div>
+
+<style>
+    /* 加载遮罩层 */
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+    }
+    .loading-overlay.hidden {
+        display: none;
+    }
+    .loading-content {
+        text-align: center;
+        color: white;
+    }
+    .spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid rgba(255, 255, 255, 0.3);
+        border-top-color: var(--accent-color);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin: 0 auto 16px;
+    }
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+    .loading-content p {
+        margin: 0;
+        font-size: 14px;
+    }
+
+    .collapsible-card .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        cursor: pointer;
+        padding: 4px 0;
+    }
+    .collapsible-card .card-preview {
+        color: var(--text-tertiary);
+        font-size: 12px;
+        margin: 4px 0 0 0;
+    }
+    .collapsible-card .collapse-icon {
+        color: var(--text-tertiary);
+        font-size: 12px;
+        transition: transform 0.2s;
+    }
+    .collapsible-card .collapse-icon.expanded {
+        transform: rotate(180deg);
+    }
+    .collapsible-content {
+        padding-top: 16px;
+        border-top: 1px solid var(--border-color);
+        margin-top: 12px;
+    }
+    .rule-form-section {
+        padding: 12px;
+        background: var(--bg-tertiary);
+        border-radius: var(--radius-md);
+        margin-top: 12px;
+    }
+    .rule-form-section h4 {
+        margin: 0 0 12px 0;
+        font-size: 13px;
+        color: var(--text-secondary);
+    }
+    .tag-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .tag-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 10px;
+        background: var(--accent-color);
+        color: white;
+        border-radius: var(--radius-sm);
+        font-size: 13px;
+    }
+    .tag-item .remove {
+        cursor: pointer;
+        opacity: 0.7;
+    }
+    .tag-item .remove:hover {
+        opacity: 1;
+    }
+</style>
+
+@section Scripts {
+<script>
+    const port = 5000;
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    const API_BASE_URL = `${protocol}//${hostname}:${port}/api`;
+    const token = localStorage.getItem('token');
+    const schemeId = document.getElementById('schemeId').value;
+    const isEdit = schemeId && schemeId !== '';
+    
+    if (!token) {
+        window.location.href = '/Home/Login';
+    }
+    
+    // 数据存储
+    let groupsList = [];
+    let oddsSequence = [10, 20, 40, 80, 160];
+    let drawRuleData = {};
+    
+    // 规则表单模板
+    const ruleFormTemplates = {
+        0: `<!-- 固定号码 -->
+            <div class="rule-form-section">
+                <h4>目标号码</h4>
+                <div id="targetNumbersList" class="tag-list" style="margin-bottom: 8px;"></div>
+                <div style="display: flex; gap: 8px;">
+                    <input type="text" id="newTargetNumber" class="form-input" placeholder="输入号码（大、单、1等）" style="flex: 1;" />
+                    <button class="btn btn-secondary" onclick="addTargetNumber()">添加</button>
+                </div>
+            </div>`,
+        1: `<!-- 开某投某 -->
+            <div class="rule-form-section">
+                <h4>映射规则</h4>
+                <div id="followLastRules" style="display: flex; flex-direction: column; gap: 8px;"></div>
+                <button class="btn btn-secondary" style="margin-top: 8px;" onclick="addFollowLastRule()">+ 添加规则</button>
+            </div>`,
+        2: `<!-- 斩龙跟龙 -->
+            <div class="rule-form-section">
+                <div class="form-group">
+                    <label>监控标签（逗号分隔）</label>
+                    <input type="text" id="sd_monitorTags" class="form-input" placeholder="大,单" onchange="updateDrawRuleData()" />
+                </div>
+                <div class="form-group">
+                    <label>连续期数阈值</label>
+                    <input type="number" id="sd_consecutiveCount" class="form-input" value="3" min="1" onchange="updateDrawRuleData()" />
+                </div>
+                <div class="form-group">
+                    <label>触发方式</label>
+                    <select id="sd_triggerMode" class="form-input" onchange="updateDrawRuleData()">
+                        <option value="0">每期检查</option>
+                        <option value="1">触发后连投</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>投注模式</label>
+                    <select id="sd_betMode" class="form-input" onchange="updateDrawRuleData()">
+                        <option value="0">正投（跟龙）</option>
+                        <option value="1">反投（斩龙）</option>
+                    </select>
+                </div>
+            </div>`,
+        3: `<!-- 号码走势 -->
+            <div class="rule-form-section">
+                <div class="form-group">
+                    <label>监控号码（逗号分隔）</label>
+                    <input type="text" id="nt_monitorNumbers" class="form-input" placeholder="大,单" onchange="updateDrawRuleData()" />
+                </div>
+                <div class="form-group">
+                    <label>监控模式</label>
+                    <select id="nt_isOmissionMode" class="form-input" onchange="updateDrawRuleData()">
+                        <option value="true">遗漏监控（N期没开）</option>
+                        <option value="false">连开监控（连续开N期）</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>阈值期数</label>
+                    <input type="number" id="nt_thresholdCount" class="form-input" value="10" min="1" onchange="updateDrawRuleData()" />
+                </div>
+                <div class="form-group">
+                    <label>投注模式</label>
+                    <select id="nt_betMode" class="form-input" onchange="updateDrawRuleData()">
+                        <option value="0">正投</option>
+                        <option value="1">反投</option>
+                    </select>
+                </div>
+            </div>`,
+        4: `<!-- 01形态 -->
+            <div class="rule-form-section">
+                <div style="display: flex; gap: 12px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label>0 代表</label>
+                        <input type="text" id="pt_codeZero" class="form-input" value="大" onchange="updateDrawRuleData()" />
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label>1 代表</label>
+                        <input type="text" id="pt_codeOne" class="form-input" value="小" onchange="updateDrawRuleData()" />
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>策略列表</label>
+                    <div id="patternStrategyList" style="display: flex; flex-direction: column; gap: 8px;"></div>
+                    <button class="btn btn-secondary" style="margin-top: 8px;" onclick="addPatternStrategy()">+ 添加策略</button>
+                </div>
+            </div>`,
+        5: `<!-- 分支走势 -->
+            <div class="rule-form-section">
+                <div style="display: flex; gap: 12px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label>0 代表</label>
+                        <input type="text" id="bt_codeZero" class="form-input" value="大" onchange="updateDrawRuleData()" />
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label>1 代表</label>
+                        <input type="text" id="bt_codeOne" class="form-input" value="小" onchange="updateDrawRuleData()" />
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>监控形态</label>
+                    <input type="text" id="bt_monitorPattern" class="form-input" placeholder="0001111" onchange="updateDrawRuleData()" />
+                </div>
+                <div class="form-group">
+                    <label>首投</label>
+                    <select id="bt_initialBet" class="form-input" onchange="updateDrawRuleData()">
+                        <option value="0">0 (大)</option>
+                        <option value="1">1 (小)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>挂了走（输后序列）</label>
+                    <input type="text" id="bt_lossPattern" class="form-input" placeholder="000001111" onchange="updateDrawRuleData()" />
+                </div>
+                <div class="form-group">
+                    <label>中了走（赢后序列）</label>
+                    <input type="text" id="bt_winPattern" class="form-input" placeholder="1110000" onchange="updateDrawRuleData()" />
+                </div>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="bt_stopOnWin" checked onchange="updateDrawRuleData()" />
+                    <span>中奖即停</span>
+                </label>
+            </div>`,
+        6: `<!-- 结果跟随 -->
+            <div class="rule-form-section">
+                <div style="display: flex; gap: 12px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label>0 代表</label>
+                        <input type="text" id="rf_codeZero" class="form-input" value="大" onchange="updateDrawRuleData()" />
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label>1 代表</label>
+                        <input type="text" id="rf_codeOne" class="form-input" value="小" onchange="updateDrawRuleData()" />
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>开0后序列</label>
+                    <input type="text" id="rf_sequenceOnZero" class="form-input" placeholder="000111" onchange="updateDrawRuleData()" />
+                </div>
+                <div class="form-group">
+                    <label>开1后序列</label>
+                    <input type="text" id="rf_sequenceOnOne" class="form-input" placeholder="111000" onchange="updateDrawRuleData()" />
+                </div>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="rf_stopOnWin" checked onchange="updateDrawRuleData()" />
+                    <span>中奖即停</span>
+                </label>
+            </div>`
+    };
+    
+    // 用于特殊规则的数据
+    let targetNumbers = [];
+    let followLastRules = [];
+    let patternStrategies = [];
+
+    document.addEventListener('DOMContentLoaded', async function() {
+        try {
+            await loadGroups();
+            renderSequence();
+            updateDrawRuleForm();
+            
+            if (isEdit) {
+                document.getElementById('deleteSection').style.display = 'block';
+                await loadScheme();
+            }
+            
+            updatePositionPanel();
+            updateOddsPreview();
+            updateDrawRulePreview();
+        } finally {
+            // 加载完成，隐藏遮罩层
+            document.getElementById('loadingOverlay').classList.add('hidden');
+        }
+    });
+
+    function togglePanel(panelId) {
+        const panel = document.getElementById(panelId);
+        const iconId = panelId.replace('Panel', 'Icon');
+        const icon = document.getElementById(iconId);
+        
+        if (panel.style.display === 'none') {
+            panel.style.display = 'block';
+            icon.classList.add('expanded');
+        } else {
+            panel.style.display = 'none';
+            icon.classList.remove('expanded');
+        }
+    }
+
+    async function loadGroups() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/telegram/chats`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const result = await response.json();
+            if (result.success && result.data) {
+                groupsList = result.data;
+                updateGroupSelect();
+            }
+        } catch (error) {
+            console.error('加载群组失败:', error);
+        }
+    }
+
+    function updateGroupSelect() {
+        const select = document.getElementById('tgGroupSelect');
+        select.innerHTML = '<option value="">请选择群组...</option>';
+        groupsList.forEach(g => {
+            const option = document.createElement('option');
+            option.value = g.id;
+            option.textContent = `${g.name} (${g.isChannel ? '频道' : '群组'})`;
+            option.dataset.name = g.name;
+            select.appendChild(option);
+        });
+    }
+
+    async function refreshGroups() {
+        try {
+            // 调用刷新 API（从 Telegram 获取最新并保存到数据库）
+            const response = await fetch(`${API_BASE_URL}/telegram/refresh-chats`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const result = await response.json();
+            if (result.success && result.data) {
+                groupsList = result.data;
+                updateGroupSelect();
+                alert(`✅ ${result.message || '刷新成功'}`);
+            } else {
+                alert(`❌ ${result.message || '刷新失败'}`);
+            }
+        } catch (error) {
+            console.error('刷新群组失败:', error);
+            alert('刷新群组失败：' + error.message);
+        }
+    }
+
+    async function loadScheme() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/scheme/${schemeId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const result = await response.json();
+            
+            if (result.success && result.data) {
+                const s = result.data;
+                document.getElementById('schemeName').value = s.name || '';
+                document.getElementById('tgGroupSelect').value = s.tgGroupId || '';
+                document.getElementById('gameType').value = s.gameType || 0;
+                document.getElementById('playMode').value = s.playMode || 0;
+                document.getElementById('oddsType').value = s.oddsType || 0;
+                document.getElementById('drawRule').value = s.drawRule || 0;
+                document.getElementById('isEnabled').checked = s.isEnabled;
+                document.getElementById('enableStopProfitLoss').checked = s.enableStopProfitLoss;
+                document.getElementById('stopProfitAmount').value = s.stopProfitAmount || '';
+                document.getElementById('stopLossAmount').value = s.stopLossAmount || '';
+                
+                // 位置
+                if (s.positionLst) {
+                    const positions = JSON.parse(s.positionLst);
+                    document.querySelectorAll('input[name="position"]').forEach(cb => {
+                        cb.checked = positions.includes(parseInt(cb.value));
+                    });
+                }
+                
+                // 倍率配置
+                if (s.oddsConfig) {
+                    const config = JSON.parse(s.oddsConfig);
+                    // 兼容大小写：后端可能返回 Sequence 或 sequence
+                    const seq = config.Sequence || config.sequence;
+                    if (seq) {
+                        oddsSequence = seq;
+                        renderSequence();
+                    }
+                    // 兼容大小写：ProgressMode 或 progressMode
+                    const progMode = config.ProgressMode ?? config.progressMode;
+                    if (progMode !== undefined) {
+                        document.getElementById('progressMode').value = progMode;
+                    }
+                }
+                
+                // 出号规则配置
+                if (s.drawRuleConfig) {
+                    drawRuleData = JSON.parse(s.drawRuleConfig);
+                    updateDrawRuleForm();
+                    loadDrawRuleData();
+                }
+                
+                updatePositionPanel();
+                toggleStopProfitLoss();
+                updateOddsPreview();
+                updateDrawRulePreview();
+            }
+        } catch (error) {
+            console.error('加载方案失败:', error);
+        }
+    }
+
+    // ============ 倍率配置 ============
+    function renderSequence() {
+        const container = document.getElementById('sequenceList');
+        container.innerHTML = '';
+        
+        oddsSequence.forEach((val, idx) => {
+            const div = document.createElement('div');
+            div.style.cssText = 'display: flex; align-items: center; gap: 8px;';
+            div.innerHTML = `
+                <span style="color: var(--text-tertiary); min-width: 50px; font-size: 13px;">第${idx + 1}关</span>
+                <input type="number" class="form-input" value="${val}" min="1" 
+                       onchange="updateSequenceValue(${idx}, this.value)" style="flex: 1;" />
+                <button type="button" class="btn-icon-small" onclick="removeSequenceItem(${idx})">🗑️</button>
+            `;
+            container.appendChild(div);
+        });
+        
+        updateOddsPreview();
+    }
+
+    function updateSequenceValue(idx, val) {
+        oddsSequence[idx] = parseInt(val) || 1;
+        updateOddsPreview();
+    }
+
+    function addSequenceItem() {
+        const lastVal = oddsSequence.length > 0 ? oddsSequence[oddsSequence.length - 1] : 10;
+        oddsSequence.push(lastVal * 2);
+        renderSequence();
+    }
+
+    function removeSequenceItem(idx) {
+        if (oddsSequence.length <= 1) {
+            alert('至少保留一关');
+            return;
+        }
+        oddsSequence.splice(idx, 1);
+        renderSequence();
+    }
+
+    function generateSequence() {
+        const start = parseInt(document.getElementById('quickStart').value) || 10;
+        const multiplier = parseFloat(document.getElementById('quickMultiplier').value) || 2;
+        const count = parseInt(document.getElementById('quickCount').value) || 10;
+        
+        oddsSequence = [];
+        let current = start;
+        for (let i = 0; i < count; i++) {
+            oddsSequence.push(Math.round(current));
+            current *= multiplier;
+        }
+        
+        renderSequence();
+    }
+
+    function updateOddsPreview() {
+        const preview = document.getElementById('oddsPreview');
+        if (oddsSequence.length > 0) {
+            const seq = oddsSequence.slice(0, 3).join(', ');
+            const suffix = oddsSequence.length > 3 ? '...' : '';
+            preview.textContent = `✓ ${seq}${suffix} (共${oddsSequence.length}关)`;
+            preview.style.color = 'var(--success-color)';
+        } else {
+            preview.textContent = '未配置';
+            preview.style.color = 'var(--text-tertiary)';
+        }
+    }
+
+    // ============ 出号规则 ============
+    function updateDrawRuleForm() {
+        const ruleType = parseInt(document.getElementById('drawRule').value);
+        const container = document.getElementById('drawRuleFormContainer');
+        container.innerHTML = ruleFormTemplates[ruleType] || '';
+        
+        // 初始化特殊规则的数据
+        if (ruleType === 0) {
+            renderTargetNumbers();
+        } else if (ruleType === 1) {
+            renderFollowLastRules();
+        } else if (ruleType === 4) {
+            renderPatternStrategies();
+        }
+        
+        updateDrawRulePreview();
+    }
+
+    function loadDrawRuleData() {
+        const ruleType = parseInt(document.getElementById('drawRule').value);
+        
+        switch(ruleType) {
+            case 0:
+                // 兼容新旧字段名
+                if (drawRuleData.betNumbers || drawRuleData.targetNumbers) {
+                    targetNumbers = drawRuleData.betNumbers || drawRuleData.targetNumbers;
+                    renderTargetNumbers();
+                }
+                break;
+            case 1:
+                if (drawRuleData.drawRuleDic) {
+                    followLastRules = Object.entries(drawRuleData.drawRuleDic).map(([k, v]) => ({
+                        trigger: k, targets: v.join(',')
+                    }));
+                    renderFollowLastRules();
+                }
+                break;
+            case 2:
+                if (drawRuleData.monitorRule) {
+                    const r = drawRuleData.monitorRule;
+                    document.getElementById('sd_monitorTags').value = r.monitorTags || '';
+                    document.getElementById('sd_consecutiveCount').value = r.requiredConsecutiveCount || 3;
+                    document.getElementById('sd_triggerMode').value = r.triggerMode || 0;
+                    document.getElementById('sd_betMode').value = r.betMode || 0;
+                }
+                break;
+            case 3:
+                document.getElementById('nt_monitorNumbers').value = drawRuleData.monitorNumbers || '';
+                document.getElementById('nt_isOmissionMode').value = String(drawRuleData.isOmissionMode !== false);
+                document.getElementById('nt_thresholdCount').value = drawRuleData.thresholdCount || 10;
+                document.getElementById('nt_betMode').value = drawRuleData.betMode || 0;
+                break;
+            case 4:
+                document.getElementById('pt_codeZero').value = drawRuleData.codeZeroDefinition || '大';
+                document.getElementById('pt_codeOne').value = drawRuleData.codeOneDefinition || '小';
+                if (drawRuleData.strategyList) {
+                    patternStrategies = drawRuleData.strategyList;
+                    renderPatternStrategies();
+                }
+                break;
+            case 5:
+                document.getElementById('bt_codeZero').value = drawRuleData.codeZeroDefinition || '大';
+                document.getElementById('bt_codeOne').value = drawRuleData.codeOneDefinition || '小';
+                document.getElementById('bt_monitorPattern').value = drawRuleData.monitorPattern || '';
+                document.getElementById('bt_initialBet').value = drawRuleData.initialBet || '0';
+                document.getElementById('bt_lossPattern').value = drawRuleData.lossPattern || '';
+                document.getElementById('bt_winPattern').value = drawRuleData.winPattern || '';
+                document.getElementById('bt_stopOnWin').checked = drawRuleData.stopOnWin !== false;
+                break;
+            case 6:
+                document.getElementById('rf_codeZero').value = drawRuleData.codeZeroDefinition || '大';
+                document.getElementById('rf_codeOne').value = drawRuleData.codeOneDefinition || '小';
+                document.getElementById('rf_sequenceOnZero').value = drawRuleData.sequenceOnZero || '';
+                document.getElementById('rf_sequenceOnOne').value = drawRuleData.sequenceOnOne || '';
+                document.getElementById('rf_stopOnWin').checked = drawRuleData.stopOnWin !== false;
+                break;
+        }
+    }
+
+    function updateDrawRuleData() {
+        updateDrawRulePreview();
+    }
+
+    function updateDrawRulePreview() {
+        const preview = document.getElementById('drawRulePreview');
+        const ruleType = parseInt(document.getElementById('drawRule').value);
+        const ruleNames = ['固定号码', '开某投某', '斩龙跟龙', '号码走势', '01形态', '分支走势', '结果跟随'];
+        preview.textContent = `✓ ${ruleNames[ruleType]}`;
+        preview.style.color = 'var(--success-color)';
+    }
+
+    // 固定号码
+    function renderTargetNumbers() {
+        const container = document.getElementById('targetNumbersList');
+        if (!container) return;
+        container.innerHTML = '';
+        targetNumbers.forEach((num, idx) => {
+            container.innerHTML += `<span class="tag-item">${num} <span class="remove" onclick="removeTargetNumber(${idx})">×</span></span>`;
+        });
+    }
+
+    function addTargetNumber() {
+        const input = document.getElementById('newTargetNumber');
+        const val = input.value.trim();
+        if (val && !targetNumbers.includes(val)) {
+            targetNumbers.push(val);
+            renderTargetNumbers();
+            input.value = '';
+        }
+    }
+
+    function removeTargetNumber(idx) {
+        targetNumbers.splice(idx, 1);
+        renderTargetNumbers();
+    }
+
+    // 开某投某
+    function renderFollowLastRules() {
+        const container = document.getElementById('followLastRules');
+        if (!container) return;
+        container.innerHTML = '';
+        followLastRules.forEach((rule, idx) => {
+            container.innerHTML += `
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <span style="color: var(--text-tertiary); font-size: 13px;">开</span>
+                    <input type="text" class="form-input" value="${rule.trigger}" placeholder="大" 
+                           style="width: 60px;" onchange="updateFollowLastRule(${idx}, 'trigger', this.value)" />
+                    <span style="color: var(--text-tertiary); font-size: 13px;">投</span>
+                    <input type="text" class="form-input" value="${rule.targets}" placeholder="小,单" 
+                           style="flex: 1;" onchange="updateFollowLastRule(${idx}, 'targets', this.value)" />
+                    <button class="btn-icon-small" onclick="removeFollowLastRule(${idx})">🗑️</button>
+                </div>
+            `;
+        });
+    }
+
+    function addFollowLastRule() {
+        followLastRules.push({ trigger: '', targets: '' });
+        renderFollowLastRules();
+    }
+
+    function updateFollowLastRule(idx, field, val) {
+        followLastRules[idx][field] = val;
+    }
+
+    function removeFollowLastRule(idx) {
+        followLastRules.splice(idx, 1);
+        renderFollowLastRules();
+    }
+
+    // 01形态策略
+    function renderPatternStrategies() {
+        const container = document.getElementById('patternStrategyList');
+        if (!container) return;
+        container.innerHTML = '';
+        patternStrategies.forEach((s, idx) => {
+            container.innerHTML += `
+                <div style="padding: 8px; background: var(--bg-primary); border-radius: var(--radius-sm); display: flex; gap: 8px; align-items: center;">
+                    <input type="text" class="form-input" value="${s.monitorPattern || ''}" placeholder="监控:000" style="flex: 1;"
+                           onchange="updatePatternStrategy(${idx}, 'monitorPattern', this.value)" />
+                    <span>→</span>
+                    <input type="text" class="form-input" value="${s.betPattern || ''}" placeholder="投注:111" style="flex: 1;"
+                           onchange="updatePatternStrategy(${idx}, 'betPattern', this.value)" />
+                    <button class="btn-icon-small" onclick="removePatternStrategy(${idx})">🗑️</button>
+                </div>
+            `;
+        });
+    }
+
+    function addPatternStrategy() {
+        patternStrategies.push({ monitorPattern: '', betPattern: '', stopOnWin: true });
+        renderPatternStrategies();
+    }
+
+    function updatePatternStrategy(idx, field, val) {
+        patternStrategies[idx][field] = val;
+    }
+
+    function removePatternStrategy(idx) {
+        patternStrategies.splice(idx, 1);
+        renderPatternStrategies();
+    }
+
+    // ============ 其他 ============
+    function updatePositionPanel() {
+        const playMode = parseInt(document.getElementById('playMode').value);
+        const needPosition = [1100, 1102, 1202, 1203].includes(playMode);
+        document.getElementById('positionGroup').style.display = needPosition ? 'block' : 'none';
+    }
+
+    function toggleStopProfitLoss() {
+        const enabled = document.getElementById('enableStopProfitLoss').checked;
+        document.getElementById('stopProfitLossGroup').style.display = enabled ? 'block' : 'none';
+    }
+
+    function buildDrawRuleConfig() {
+        const ruleType = parseInt(document.getElementById('drawRule').value);
+        
+        switch(ruleType) {
+            case 0:
+                return { "$type": "fixed_number", betNumbers: targetNumbers };
+            case 1:
+                const dic = {};
+                followLastRules.forEach(r => {
+                    if (r.trigger) {
+                        dic[r.trigger] = r.targets.split(',').map(s => s.trim()).filter(s => s);
+                    }
+                });
+                return { "$type": "followlast_number", drawRuleDic: dic };
+            case 2:
+                return {
+                    "$type": "SlayDragon_number",
+                    monitorRule: {
+                        monitorTags: document.getElementById('sd_monitorTags')?.value || '',
+                        requiredConsecutiveCount: parseInt(document.getElementById('sd_consecutiveCount')?.value) || 3,
+                        triggerMode: parseInt(document.getElementById('sd_triggerMode')?.value) || 0,
+                        betMode: parseInt(document.getElementById('sd_betMode')?.value) || 0,
+                        continueBetCount: 3,
+                        fixedBetContent: ''
+                    }
+                };
+            case 3:
+                return {
+                    "$type": "NumberTrend_number",
+                    monitorNumbers: document.getElementById('nt_monitorNumbers')?.value || '',
+                    isOmissionMode: document.getElementById('nt_isOmissionMode')?.value === 'true',
+                    thresholdCount: parseInt(document.getElementById('nt_thresholdCount')?.value) || 10,
+                    isFullMatch: false,
+                    triggerMode: 0,
+                    betMode: parseInt(document.getElementById('nt_betMode')?.value) || 0,
+                    continueBetCount: 1,
+                    fixedBetContent: ''
+                };
+            case 4:
+                return {
+                    "$type": "PatternTrend_number",
+                    codeZeroDefinition: document.getElementById('pt_codeZero')?.value || '大',
+                    codeOneDefinition: document.getElementById('pt_codeOne')?.value || '小',
+                    strategyList: patternStrategies
+                };
+            case 5:
+                return {
+                    "$type": "BranchTrend_number",
+                    codeZeroDefinition: document.getElementById('bt_codeZero')?.value || '大',
+                    codeOneDefinition: document.getElementById('bt_codeOne')?.value || '小',
+                    monitorPattern: document.getElementById('bt_monitorPattern')?.value || '',
+                    initialBet: document.getElementById('bt_initialBet')?.value || '0',
+                    lossPattern: document.getElementById('bt_lossPattern')?.value || '',
+                    winPattern: document.getElementById('bt_winPattern')?.value || '',
+                    stopOnWin: document.getElementById('bt_stopOnWin')?.checked !== false
+                };
+            case 6:
+                return {
+                    "$type": "ResultFollow_number",
+                    codeZeroDefinition: document.getElementById('rf_codeZero')?.value || '大',
+                    codeOneDefinition: document.getElementById('rf_codeOne')?.value || '小',
+                    sequenceOnZero: document.getElementById('rf_sequenceOnZero')?.value || '',
+                    sequenceOnOne: document.getElementById('rf_sequenceOnOne')?.value || '',
+                    stopOnWin: document.getElementById('rf_stopOnWin')?.checked !== false
+                };
+            default:
+                return null;
+        }
+    }
+
+    async function saveScheme() {
+        const name = document.getElementById('schemeName').value.trim();
+        if (!name) {
+            alert('请输入方案名称');
+            return;
+        }
+        
+        const tgGroupSelect = document.getElementById('tgGroupSelect');
+        const tgGroupId = tgGroupSelect.value;
+        if (!tgGroupId) {
+            alert('请选择 Telegram 群组');
+            return;
+        }
+        
+        const selectedOption = tgGroupSelect.options[tgGroupSelect.selectedIndex];
+        const tgGroupName = selectedOption.dataset.name || selectedOption.text;
+        
+        const positions = [];
+        document.querySelectorAll('input[name="position"]:checked').forEach(cb => {
+            positions.push(parseInt(cb.value));
+        });
+        
+        const oddsConfig = {
+            "$type": "linear",
+            sequence: oddsSequence,
+            progressMode: parseInt(document.getElementById('progressMode').value)
+        };
+        
+        const drawRuleConfig = buildDrawRuleConfig();
+        
+        const data = {
+            name: name,
+            tgGroupName: tgGroupName,
+            tgGroupId: parseInt(tgGroupId),
+            gameType: parseInt(document.getElementById('gameType').value),
+            playMode: parseInt(document.getElementById('playMode').value),
+            oddsType: parseInt(document.getElementById('oddsType').value),
+            positionLst: positions,
+            oddsConfig: oddsConfig,
+            drawRule: parseInt(document.getElementById('drawRule').value),
+            drawRuleConfig: drawRuleConfig,
+            enableStopProfitLoss: document.getElementById('enableStopProfitLoss').checked,
+            stopProfitAmount: parseFloat(document.getElementById('stopProfitAmount').value) || 0,
+            stopLossAmount: parseFloat(document.getElementById('stopLossAmount').value) || 0,
+            isEnabled: document.getElementById('isEnabled').checked
+        };
+        
+        const saveBtn = document.getElementById('saveBtn');
+        saveBtn.disabled = true;
+        saveBtn.textContent = '保存中...';
+        
+        try {
+            const url = isEdit ? `${API_BASE_URL}/scheme/${schemeId}` : `${API_BASE_URL}/scheme`;
+            const method = isEdit ? 'PUT' : 'POST';
+            
+            const response = await fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(data)
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                window.location.href = '/Home/Schemes';
+            } else {
+                alert(result.message || '保存失败');
+            }
+        } catch (error) {
+            alert('网络错误');
+            console.error(error);
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = '保存';
+        }
+    }
+
+    async function deleteScheme() {
+        if (!confirm('确定要删除这个方案吗？此操作不可恢复。')) return;
+        
+        try {
+            const response = await fetch(`${API_BASE_URL}/scheme/${schemeId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                window.location.href = '/Home/Schemes';
+            } else {
+                alert(result.message || '删除失败');
+            }
+        } catch (error) {
+            alert('网络错误');
+        }
+    }
+
+    function goBack() {
+        window.location.href = '/Home/Schemes';
+    }
+</script>
+}

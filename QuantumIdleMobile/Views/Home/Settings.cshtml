@@ -1,0 +1,204 @@
+@{
+    ViewData["Title"] = "设置";
+}
+
+<div class="page-container">
+    <div class="header">
+        <h1>⚙️ 设置</h1>
+    </div>
+    
+    <div class="content">
+        <div class="card">
+            <h3>账户信息</h3>
+            <div id="userInfoSettings">
+                <div class="info-item">
+                    <span class="label">用户名</span>
+                    <span class="value" id="settingsUserName">-</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">到期时间</span>
+                    <span class="value" id="settingsExpireTime">-</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h3>API 配置</h3>
+            <div class="form-group">
+                <label for="apiBaseUrl">服务器地址</label>
+                <input type="text" id="apiBaseUrl" class="form-input" placeholder="http://localhost:5000/api" />
+            </div>
+            <button class="btn btn-primary" onclick="saveApiUrl()">保存配置</button>
+        </div>
+        
+        <div class="card">
+            <h3>关于</h3>
+            <div class="info-item">
+                <span class="label">版本</span>
+                <span class="value">v1.0.0</span>
+            </div>
+            <div class="info-item">
+                <span class="label">框架</span>
+                <span class="value">ASP.NET Core 10.0</span>
+            </div>
+            <div class="info-item">
+                <span class="label">UI</span>
+                <span class="value">Microsoft Fluent Design</span>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h3>🔑 卡密激活</h3>
+            <div class="form-group">
+                <label for="cardCode">卡密码</label>
+                <input type="text" id="cardCode" class="form-input" placeholder="请输入卡密" />
+            </div>
+            <button class="btn btn-primary btn-block" onclick="activateCard()" id="activateBtn">
+                激活卡密
+            </button>
+            <div id="activateResult" style="margin-top: 12px; display: none;"></div>
+        </div>
+        
+        <div class="card" style="margin-top: 24px;">
+            <button class="btn btn-danger btn-block" onclick="logout()">
+                退出登录
+            </button>
+        </div>
+    </div>
+    
+    <div class="bottom-nav">
+        <a href="/Home/Dashboard" class="nav-item">
+            <span class="nav-icon">🏠</span>
+            <span class="nav-text">首页</span>
+        </a>
+        <a href="/Home/Telegram" class="nav-item">
+            <span class="nav-icon">📱</span>
+            <span class="nav-text">TG连接</span>
+        </a>
+        <a href="/Home/Schemes" class="nav-item">
+            <span class="nav-icon">📋</span>
+            <span class="nav-text">方案</span>
+        </a>
+        <a href="/Home/History" class="nav-item">
+            <span class="nav-icon">📊</span>
+            <span class="nav-text">历史</span>
+        </a>
+        <a href="/Home/Settings" class="nav-item active">
+            <span class="nav-icon">⚙️</span>
+            <span class="nav-text">设置</span>
+        </a>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    // 检查登录状态
+    const token = localStorage.getItem('token');
+    if (!token) {
+        window.location.href = '/Home/Login';
+    }
+    
+    // 加载用户信息
+    function loadUserSettings() {
+        const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
+        document.getElementById('settingsUserName').textContent = userInfo.userName || '-';
+        
+        if (userInfo.expireTime) {
+            const expireDate = new Date(userInfo.expireTime);
+            document.getElementById('settingsExpireTime').textContent = expireDate.toLocaleString('zh-CN');
+        }
+    }
+    
+    const port = 5000;
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    const defaultApiUrl = `${protocol}//${hostname}:${port}/api`;
+
+    // 加载保存的 API 地址
+    const savedApiUrl = localStorage.getItem('apiBaseUrl');
+    if (savedApiUrl) {
+        document.getElementById('apiBaseUrl').value = savedApiUrl;
+    } else {
+        document.getElementById('apiBaseUrl').value = defaultApiUrl;
+    }
+    
+    function saveApiUrl() {
+        const apiUrl = document.getElementById('apiBaseUrl').value.trim();
+        if (!apiUrl) {
+            alert('请输入有效的 API 地址');
+            return;
+        }
+        localStorage.setItem('apiBaseUrl', apiUrl);
+        alert('✅ 配置已保存');
+    }
+    
+    function logout() {
+        if (confirm('确定要退出登录吗？')) {
+            localStorage.removeItem('token');
+            localStorage.removeItem('userName');
+            localStorage.removeItem('userInfo');
+            window.location.href = '/Home/Login';
+        }
+    }
+    
+    async function activateCard() {
+        const cardCode = document.getElementById('cardCode').value.trim();
+        if (!cardCode) {
+            alert('请输入卡密');
+            return;
+        }
+        
+        const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
+        if (!userInfo.userName) {
+            alert('用户信息丢失，请重新登录');
+            return;
+        }
+        
+        const btn = document.getElementById('activateBtn');
+        btn.disabled = true;
+        btn.textContent = '激活中...';
+        
+        const resultDiv = document.getElementById('activateResult');
+        
+        try {
+            const response = await fetch(`${defaultApiUrl}/cardkey/activate`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    cardCode: cardCode,
+                    userName: userInfo.userName
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                // 更新本地用户信息
+                userInfo.expireTime = result.expireTime;
+                localStorage.setItem('userInfo', JSON.stringify(userInfo));
+                
+                resultDiv.innerHTML = `<div style="color: var(--success-color); padding: 12px; background: rgba(82, 196, 26, 0.1); border-radius: var(--radius-sm);">✅ ${result.message}</div>`;
+                resultDiv.style.display = 'block';
+                
+                // 刷新显示
+                loadUserSettings();
+                document.getElementById('cardCode').value = '';
+            } else {
+                resultDiv.innerHTML = `<div style="color: var(--error-color); padding: 12px; background: rgba(255, 77, 79, 0.1); border-radius: var(--radius-sm);">❌ ${result.message}</div>`;
+                resultDiv.style.display = 'block';
+            }
+        } catch (error) {
+            resultDiv.innerHTML = `<div style="color: var(--error-color); padding: 12px; background: rgba(255, 77, 79, 0.1); border-radius: var(--radius-sm);">❌ 网络错误: ${error.message}</div>`;
+            resultDiv.style.display = 'block';
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '激活卡密';
+        }
+    }
+    
+    loadUserSettings();
+</script>
+}
