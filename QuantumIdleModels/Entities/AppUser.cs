@@ -73,5 +73,17 @@ namespace QuantumIdleModels.Entities
         /// 模拟流水
         /// </summary>
         public decimal SimTurnover { get; set; } = 0;
+
+        // ========== 推送设置 ==========
+
+        /// <summary>
+        /// 是否推送注单信息
+        /// </summary>
+        public bool PushOrders { get; set; } = false;
+
+        /// <summary>
+        /// 是否推送报警信息（下注失败等）
+        /// </summary>
+        public bool PushAlerts { get; set; } = true;
     }
 }

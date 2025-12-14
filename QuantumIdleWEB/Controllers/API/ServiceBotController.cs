@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using QuantumIdleModels.Entities;
 using QuantumIdleWEB.Data;
 using QuantumIdleWEB.Services;
 using System.Security.Cryptography;
@@ -7,11 +8,12 @@ using System.Text;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
+using Telegram.Bot.Types.ReplyMarkups;
 
 namespace QuantumIdleWeb.Controllers.Api
 {
     /// <summary>
-    /// 服务机器人控制器 - 处理 @liangziweb_bot 的命令
+    /// 服务机器人控制器 - 处理 @liangziweb_bot 的命令（按钮式交互）
     /// </summary>
     [Route("api/[controller]")]
     [ApiController]
@@ -21,7 +23,7 @@ namespace QuantumIdleWeb.Controllers.Api
         private readonly IServiceProvider _serviceProvider;
         private readonly GameContextService _gameService;
         private readonly ILogger<ServiceBotController> _logger;
-        private readonly ITelegramBotClient _serviceBot;
+        private readonly ITelegramBotClient? _serviceBot;
 
         public ServiceBotController(
             IConfiguration config,
@@ -34,7 +36,6 @@ namespace QuantumIdleWeb.Controllers.Api
             _gameService = gameService;
             _logger = logger;
             
-            // 创建服务机器人客户端
             var botToken = config["ServiceBot:BotToken"];
             if (!string.IsNullOrEmpty(botToken))
             {
@@ -42,38 +43,39 @@ namespace QuantumIdleWeb.Controllers.Api
             }
         }
 
-        /// <summary>
-        /// 接收服务机器人 Webhook 更新
-        /// </summary>
         [HttpPost("update")]
         public async Task<IActionResult> Update([FromBody] Update update)
         {
-            if (update?.Message?.Text == null) return Ok();
-
-            var message = update.Message;
-            var chatId = message.Chat.Id;
-            var text = message.Text.Trim();
-            var userName = message.From?.Username ?? message.From?.FirstName ?? "用户";
+            if (_serviceBot == null) return Ok();
 
             try
             {
-                await ProcessCommand(chatId, text, userName);
+                // 处理回调查询（按钮点击）
+                if (update.CallbackQuery != null)
+                {
+                    await HandleCallback(update.CallbackQuery);
+                    return Ok();
+                }
+
+                // 处理消息
+                if (update.Message?.Text != null)
+                {
+                    await HandleMessage(update.Message);
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"处理服务机器人命令失败: {text}");
-                await SendMessage(chatId, $"❌ 处理命令时出错: {ex.Message}");
+                _logger.LogError(ex, "处理服务机器人更新失败");
             }
 
             return Ok();
         }
 
-        /// <summary>
-        /// 设置 Webhook
-        /// </summary>
         [HttpGet("set-webhook")]
         public async Task<IActionResult> SetWebhook()
         {
+            if (_serviceBot == null) return BadRequest(new { success = false, message = "Bot未配置" });
+
             var webhookUrl = _config["ServiceBot:WebhookUrl"];
             if (string.IsNullOrEmpty(webhookUrl))
             {
@@ -83,171 +85,206 @@ namespace QuantumIdleWeb.Controllers.Api
             await _serviceBot.SetWebhook(webhookUrl);
             var info = await _serviceBot.GetWebhookInfo();
 
-            return Ok(new
-            {
-                success = true,
-                message = "Webhook 设置成功",
-                url = info.Url,
-                pending_updates = info.PendingUpdateCount
-            });
+            return Ok(new { success = true, url = info.Url, pending_updates = info.PendingUpdateCount });
         }
 
-        private async Task ProcessCommand(long chatId, string text, string tgUserName)
+        private async Task HandleMessage(Message message)
         {
+            var chatId = message.Chat.Id;
+            var text = message.Text?.Trim() ?? "";
+
             using var scope = _serviceProvider.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-            // 解析命令
-            var parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            var command = parts[0].ToLower().Replace("@liangziweb_bot", "");
+            // 检查是否已绑定
+            var user = await dbContext.Users.FirstOrDefaultAsync(u => u.TelegramChatId == chatId);
 
-            switch (command)
+            if (text.StartsWith("/start"))
             {
-                case "/start":
-                    await HandleStart(chatId);
-                    break;
+                await ShowWelcome(chatId, user);
+            }
+            else if (text.StartsWith("/bind "))
+            {
+                var parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length >= 3)
+                {
+                    await HandleBind(chatId, parts[1], parts[2], dbContext);
+                }
+                else
+                {
+                    await SendMessage(chatId, "⚠️ 格式: /bind 用户名 密码");
+                }
+            }
+            else if (user == null)
+            {
+                await SendMessage(chatId, "⚠️ 请先绑定账号！\n\n发送: /bind 用户名 密码");
+            }
+            else
+            {
+                await ShowMainMenu(chatId, user);
+            }
+        }
 
-                case "/bind":
-                    if (parts.Length >= 3)
-                    {
-                        await HandleBind(chatId, parts[1], parts[2], dbContext);
-                    }
-                    else
-                    {
-                        await SendMessage(chatId, "⚠️ 使用方法: /bind <用户名> <密码>");
-                    }
-                    break;
+        private async Task HandleCallback(CallbackQuery callback)
+        {
+            if (_serviceBot == null || callback.Message == null) return;
 
-                case "/status":
-                    await HandleStatus(chatId, dbContext);
-                    break;
+            var chatId = callback.Message.Chat.Id;
+            var data = callback.Data ?? "";
 
-                case "/start_bot":
-                    await HandleStartBot(chatId, dbContext);
-                    break;
+            using var scope = _serviceProvider.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var user = await dbContext.Users.FirstOrDefaultAsync(u => u.TelegramChatId == chatId);
 
-                case "/stop_bot":
-                    await HandleStopBot(chatId, dbContext);
-                    break;
+            if (user == null)
+            {
+                await _serviceBot.AnswerCallbackQuery(callback.Id, "请先绑定账号！");
+                return;
+            }
 
-                case "/sim":
-                    await HandleSwitchMode(chatId, true, dbContext);
-                    break;
+            await _serviceBot.AnswerCallbackQuery(callback.Id);
 
-                case "/real":
-                    await HandleSwitchMode(chatId, false, dbContext);
+            switch (data)
+            {
+                case "status":
+                    await ShowStatus(chatId, user);
                     break;
-
-                case "/orders":
-                    await HandleOrders(chatId, dbContext);
+                case "start_bot":
+                    await StartBot(chatId, user);
                     break;
-
-                case "/buy":
-                    await HandleBuy(chatId);
+                case "stop_bot":
+                    await StopBot(chatId, user);
                     break;
-
-                default:
-                    await SendMessage(chatId, "❓ 未知命令，发送 /start 查看帮助");
+                case "mode_sim":
+                    _gameService.IsSimulation = true;
+                    await SendMessage(chatId, "✅ 已切换到 *模拟模式*", ParseMode.Markdown);
+                    break;
+                case "mode_real":
+                    _gameService.IsSimulation = false;
+                    await SendMessage(chatId, "✅ 已切换到 *真实模式*", ParseMode.Markdown);
+                    break;
+                case "orders":
+                    await ShowOrders(chatId, user, dbContext);
+                    break;
+                case "settings":
+                    await ShowSettings(chatId, user);
+                    break;
+                case "toggle_push_orders":
+                    user.PushOrders = !user.PushOrders;
+                    await dbContext.SaveChangesAsync();
+                    await ShowSettings(chatId, user);
+                    break;
+                case "toggle_push_alerts":
+                    user.PushAlerts = !user.PushAlerts;
+                    await dbContext.SaveChangesAsync();
+                    await ShowSettings(chatId, user);
+                    break;
+                case "buy":
+                    await ShowBuy(chatId);
+                    break;
+                case "menu":
+                    await ShowMainMenu(chatId, user);
+                    break;
+                case "unbind":
+                    user.TelegramChatId = 0;
+                    await dbContext.SaveChangesAsync();
+                    await SendMessage(chatId, "✅ 已解绑账号\n\n发送 /start 重新开始");
                     break;
             }
         }
 
-        private async Task HandleStart(long chatId)
+        private async Task ShowWelcome(long chatId, AppUser? user)
         {
-            var message = @"⚡ *量子挂机机器人*
+            if (user != null)
+            {
+                await ShowMainMenu(chatId, user);
+                return;
+            }
 
-欢迎使用量子挂机！以下是可用命令：
+            var text = @"⚡ *量子挂机机器人*
 
-🔗 *绑定账号*
-`/bind <用户名> <密码>` - 绑定您的账户
+欢迎使用！请先绑定您的账号。
 
-📊 *挂机控制*
-`/status` - 查看挂机状态
-`/start_bot` - 开始挂机
-`/stop_bot` - 停止挂机
-`/sim` - 切换到模拟模式
-`/real` - 切换到真实模式
-
-📝 *其他*
-`/orders` - 查看最近5条注单
-`/buy` - 购买/续费
+*绑定方式:*
+发送: `/bind 用户名 密码`
 
 ━━━━━━━━━━━━━━
-🌐 官网: https://liangzi.love";
+🌐 官网注册: liangzi.love";
 
-            await SendMessage(chatId, message, ParseMode.Markdown);
+            await SendMessage(chatId, text, ParseMode.Markdown);
         }
 
-        private async Task HandleBind(long chatId, string username, string password, ApplicationDbContext dbContext)
+        private async Task ShowMainMenu(long chatId, AppUser user)
         {
-            // 验证用户名密码
-            var user = await dbContext.Users.FirstOrDefaultAsync(u => u.UserName == username);
-            if (user == null)
+            var runningIcon = _gameService.IsRunning ? "🟢" : "🔴";
+            var modeIcon = _gameService.IsSimulation ? "🎮" : "💰";
+            var status = _gameService.IsRunning ? "运行中" : "已停止";
+            var mode = _gameService.IsSimulation ? "模拟" : "真实";
+
+            var text = $@"⚡ *量子挂机*
+
+👤 用户: {user.UserName}
+{runningIcon} 状态: {status}
+{modeIcon} 模式: {mode}模式";
+
+            var keyboard = new InlineKeyboardMarkup(new[]
             {
-                await SendMessage(chatId, "❌ 用户名不存在");
-                return;
-            }
+                new[] 
+                {
+                    InlineKeyboardButton.WithCallbackData("📊 状态", "status"),
+                    InlineKeyboardButton.WithCallbackData(_gameService.IsRunning ? "⏹ 停止" : "▶️ 开始", _gameService.IsRunning ? "stop_bot" : "start_bot")
+                },
+                new[]
+                {
+                    InlineKeyboardButton.WithCallbackData("🎮 模拟", "mode_sim"),
+                    InlineKeyboardButton.WithCallbackData("💰 真实", "mode_real")
+                },
+                new[]
+                {
+                    InlineKeyboardButton.WithCallbackData("📝 注单", "orders"),
+                    InlineKeyboardButton.WithCallbackData("⚙️ 设置", "settings")
+                },
+                new[]
+                {
+                    InlineKeyboardButton.WithCallbackData("💳 购买续费", "buy")
+                }
+            });
 
-            // 使用 SHA256 验证密码
-            var inputHash = ComputeHash(password);
-            if (user.PasswordHash != inputHash)
-            {
-                await SendMessage(chatId, "❌ 密码错误");
-                return;
-            }
-
-            // 绑定 TG Chat ID
-            user.TelegramChatId = chatId;
-            await dbContext.SaveChangesAsync();
-
-            await SendMessage(chatId, $"✅ 绑定成功！\n\n欢迎回来，*{username}*\n\n现在您可以使用机器人控制挂机了。", ParseMode.Markdown);
+            await SendMessage(chatId, text, ParseMode.Markdown, keyboard);
         }
 
-        private async Task HandleStatus(long chatId, ApplicationDbContext dbContext)
+        private async Task ShowStatus(long chatId, AppUser user)
         {
-            var user = await dbContext.Users.FirstOrDefaultAsync(u => u.TelegramChatId == chatId);
-            if (user == null)
-            {
-                await SendMessage(chatId, "⚠️ 请先使用 /bind 绑定账号");
-                return;
-            }
-
             var runningStatus = _gameService.IsRunning ? "🟢 运行中" : "🔴 已停止";
             var modeStatus = _gameService.IsSimulation ? "🎮 模拟模式" : "💰 真实模式";
-            
-            // 检查账户到期
             var expireStatus = user.ExpireTime > DateTime.Now 
-                ? $"✅ {user.ExpireTime:yyyy-MM-dd HH:mm}" 
+                ? $"✅ {user.ExpireTime:yyyy-MM-dd}" 
                 : "❌ 已过期";
 
-            var message = $@"📊 *挂机状态*
+            var text = $@"📊 *详细状态*
 
 👤 用户: {user.UserName}
 📅 到期: {expireStatus}
-
-*当前状态*
 {runningStatus}
 {modeStatus}
 
 *盈亏统计*
-💰 实盘: {(user.Profit >= 0 ? "+" : "")}{user.Profit:F2} / 流水 {user.Turnover:F2}
-🎮 模拟: {(user.SimProfit >= 0 ? "+" : "")}{user.SimProfit:F2} / 流水 {user.SimTurnover:F2}";
+💰 实盘: {(user.Profit >= 0 ? "+" : "")}{user.Profit:F2}
+🎮 模拟: {(user.SimProfit >= 0 ? "+" : "")}{user.SimProfit:F2}";
 
-            await SendMessage(chatId, message, ParseMode.Markdown);
+            var keyboard = new InlineKeyboardMarkup(new[]
+            {
+                new[] { InlineKeyboardButton.WithCallbackData("◀️ 返回", "menu") }
+            });
+
+            await SendMessage(chatId, text, ParseMode.Markdown, keyboard);
         }
 
-        private async Task HandleStartBot(long chatId, ApplicationDbContext dbContext)
+        private async Task StartBot(long chatId, AppUser user)
         {
-            var user = await dbContext.Users.FirstOrDefaultAsync(u => u.TelegramChatId == chatId);
-            if (user == null)
-            {
-                await SendMessage(chatId, "⚠️ 请先使用 /bind 绑定账号");
-                return;
-            }
-
             if (user.ExpireTime < DateTime.Now)
             {
-                await SendMessage(chatId, "❌ 账户已过期，请使用 /buy 续费");
+                await SendMessage(chatId, "❌ 账户已过期，请先续费！");
                 return;
             }
 
@@ -255,98 +292,128 @@ namespace QuantumIdleWeb.Controllers.Api
             var mode = _gameService.IsSimulation ? "模拟" : "真实";
             _gameService.AddLog($">>> [TG] 开始挂机 ({mode})", user.Id);
 
-            await SendMessage(chatId, $"✅ 挂机已启动！\n\n当前模式: {mode}模式");
+            await SendMessage(chatId, $"✅ 挂机已启动！\n当前模式: {mode}模式");
+            await ShowMainMenu(chatId, user);
         }
 
-        private async Task HandleStopBot(long chatId, ApplicationDbContext dbContext)
+        private async Task StopBot(long chatId, AppUser user)
         {
-            var user = await dbContext.Users.FirstOrDefaultAsync(u => u.TelegramChatId == chatId);
-            if (user == null)
-            {
-                await SendMessage(chatId, "⚠️ 请先使用 /bind 绑定账号");
-                return;
-            }
-
             _gameService.IsRunning = false;
             _gameService.AddLog(">>> [TG] 挂机已停止", user.Id);
 
             await SendMessage(chatId, "⏹ 挂机已停止");
+            await ShowMainMenu(chatId, user);
         }
 
-        private async Task HandleSwitchMode(long chatId, bool simulation, ApplicationDbContext dbContext)
+        private async Task ShowOrders(long chatId, AppUser user, ApplicationDbContext dbContext)
         {
-            var user = await dbContext.Users.FirstOrDefaultAsync(u => u.TelegramChatId == chatId);
-            if (user == null)
-            {
-                await SendMessage(chatId, "⚠️ 请先使用 /bind 绑定账号");
-                return;
-            }
-
-            _gameService.IsSimulation = simulation;
-            var mode = simulation ? "模拟" : "真实";
-            _gameService.AddLog($">>> [TG] 切换到{mode}模式", user.Id);
-
-            await SendMessage(chatId, $"✅ 已切换到 *{mode}模式*", ParseMode.Markdown);
-        }
-
-        private async Task HandleOrders(long chatId, ApplicationDbContext dbContext)
-        {
-            var user = await dbContext.Users.FirstOrDefaultAsync(u => u.TelegramChatId == chatId);
-            if (user == null)
-            {
-                await SendMessage(chatId, "⚠️ 请先使用 /bind 绑定账号");
-                return;
-            }
-
             var orders = await dbContext.BetOrders
                 .Where(o => o.AppUserId == user.Id)
                 .OrderByDescending(o => o.BetTime)
                 .Take(5)
                 .ToListAsync();
 
+            string text;
             if (orders.Count == 0)
             {
-                await SendMessage(chatId, "📝 暂无注单记录");
+                text = "📝 暂无注单记录";
+            }
+            else
+            {
+                text = "📝 *最近5条注单*\n\n";
+                foreach (var order in orders)
+                {
+                    var status = order.Status == 1 ? (order.IsWin ? "✅" : "❌") : "⏳";
+                    var profit = order.Profit >= 0 ? $"+{order.Profit:F2}" : $"{order.Profit:F2}";
+                    text += $"{status} {order.BetContent} | ¥{order.Amount} | {profit}\n";
+                }
+            }
+
+            var keyboard = new InlineKeyboardMarkup(new[]
+            {
+                new[] { InlineKeyboardButton.WithCallbackData("◀️ 返回", "menu") }
+            });
+
+            await SendMessage(chatId, text, ParseMode.Markdown, keyboard);
+        }
+
+        private async Task ShowSettings(long chatId, AppUser user)
+        {
+            var pushOrdersIcon = user.PushOrders ? "✅" : "❌";
+            var pushAlertsIcon = user.PushAlerts ? "✅" : "❌";
+
+            var text = $@"⚙️ *推送设置*
+
+{pushOrdersIcon} 注单推送: {(user.PushOrders ? "开启" : "关闭")}
+{pushAlertsIcon} 报警推送: {(user.PushAlerts ? "开启" : "关闭")}
+
+点击下方按钮切换设置";
+
+            var keyboard = new InlineKeyboardMarkup(new[]
+            {
+                new[]
+                {
+                    InlineKeyboardButton.WithCallbackData($"{pushOrdersIcon} 注单推送", "toggle_push_orders"),
+                    InlineKeyboardButton.WithCallbackData($"{pushAlertsIcon} 报警推送", "toggle_push_alerts")
+                },
+                new[] { InlineKeyboardButton.WithCallbackData("🔓 解绑账号", "unbind") },
+                new[] { InlineKeyboardButton.WithCallbackData("◀️ 返回", "menu") }
+            });
+
+            await SendMessage(chatId, text, ParseMode.Markdown, keyboard);
+        }
+
+        private async Task ShowBuy(long chatId)
+        {
+            var text = @"💳 *购买/续费*
+
+📦 月卡 - ¥99 (30天)
+📦 季卡 - ¥249 (90天) *推荐*
+📦 年卡 - ¥799 (365天)
+
+━━━━━━━━━━━━━━
+联系客服购买";
+
+            var keyboard = new InlineKeyboardMarkup(new[]
+            {
+                new[] { InlineKeyboardButton.WithUrl("📱 联系客服", "https://t.me/your_support") },
+                new[] { InlineKeyboardButton.WithUrl("🌐 官网购买", "https://liangzi.love") },
+                new[] { InlineKeyboardButton.WithCallbackData("◀️ 返回", "menu") }
+            });
+
+            await SendMessage(chatId, text, ParseMode.Markdown, keyboard);
+        }
+
+        private async Task HandleBind(long chatId, string username, string password, ApplicationDbContext dbContext)
+        {
+            var user = await dbContext.Users.FirstOrDefaultAsync(u => u.UserName == username);
+            if (user == null)
+            {
+                await SendMessage(chatId, "❌ 用户名不存在");
                 return;
             }
 
-            var message = "📝 *最近5条注单*\n\n";
-            foreach (var order in orders)
+            var inputHash = ComputeHash(password);
+            if (user.PasswordHash != inputHash)
             {
-                var status = order.Status == 1 ? (order.IsWin ? "✅" : "❌") : "⏳";
-                var profit = order.Profit >= 0 ? $"+{order.Profit:F2}" : $"{order.Profit:F2}";
-                message += $"{status} {order.BetContent} | ¥{order.Amount} | {profit}\n";
+                await SendMessage(chatId, "❌ 密码错误");
+                return;
             }
 
-            await SendMessage(chatId, message, ParseMode.Markdown);
+            user.TelegramChatId = chatId;
+            await dbContext.SaveChangesAsync();
+
+            await SendMessage(chatId, $"✅ 绑定成功！\n\n欢迎回来，*{username}*", ParseMode.Markdown);
+            await ShowMainMenu(chatId, user);
         }
 
-        private async Task HandleBuy(long chatId)
-        {
-            var message = @"💳 *购买/续费*
-
-请选择套餐：
-
-📦 *月卡* - ¥99 (30天)
-📦 *季卡* - ¥249 (90天) 推荐
-📦 *年卡* - ¥799 (365天)
-
-━━━━━━━━━━━━━━
-联系客服购买: @your_customer_service
-
-或访问官网自助购买:
-https://liangzi.love";
-
-            await SendMessage(chatId, message, ParseMode.Markdown);
-        }
-
-        private async Task SendMessage(long chatId, string text, ParseMode parseMode = ParseMode.Html)
+        private async Task SendMessage(long chatId, string text, ParseMode parseMode = ParseMode.Html, InlineKeyboardMarkup? replyMarkup = null)
         {
             if (_serviceBot == null) return;
             
             try
             {
-                await _serviceBot.SendMessage(chatId, text, parseMode: parseMode);
+                await _serviceBot.SendMessage(chatId, text, parseMode: parseMode, replyMarkup: replyMarkup);
             }
             catch (Exception ex)
             {
@@ -356,16 +423,14 @@ https://liangzi.love";
 
         private string ComputeHash(string input)
         {
-            using (var sha256 = SHA256.Create())
+            using var sha256 = SHA256.Create();
+            var bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(input));
+            var builder = new StringBuilder();
+            for (int i = 0; i < bytes.Length; i++)
             {
-                var bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(input));
-                var builder = new StringBuilder();
-                for (int i = 0; i < bytes.Length; i++)
-                {
-                    builder.Append(bytes[i].ToString("x2"));
-                }
-                return builder.ToString();
+                builder.Append(bytes[i].ToString("x2"));
             }
+            return builder.ToString();
         }
     }
 }
