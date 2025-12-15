@@ -183,13 +183,32 @@ namespace QuantumIdleWEB.Services
                 var delay = _random.Next(500, 2000);
                 await Task.Delay(delay);
 
-                // 发送消息（需要实现）
-                _gameService.AddLog($"[实盘] 发送下注: {msgContent}");
+                // 获取用户 ID（所有订单应属于同一用户）
+                var userId = orders.First().AppUserId;
 
-                // 标记订单状态
-                foreach (var order in orders)
+                // 发送消息到 Telegram 群组
+                var messageId = await _telegramService.SendMessageAsync(userId, context.GroupId, msgContent);
+
+                if (messageId > 0)
                 {
-                    order.Status = (int)OrderStatus.Confirmed;
+                    _gameService.AddLog($"[实盘] 下注已发送 | MsgId:{messageId} | 内容:{msgContent}", userId);
+                    
+                    // 标记订单状态为已确认，等待机器人回复
+                    foreach (var order in orders)
+                    {
+                        order.TgMsgId = messageId;
+                        order.Status = (int)OrderStatus.Confirmed;
+                    }
+                }
+                else
+                {
+                    _gameService.AddLog($"[实盘] 下注失败 | 内容:{msgContent}", userId);
+                    
+                    // 标记订单状态为失败
+                    foreach (var order in orders)
+                    {
+                        order.Status = (int)OrderStatus.BetFailed;
+                    }
                 }
 
                 await SaveOrders(dbContext, orders);

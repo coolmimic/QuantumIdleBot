@@ -145,3 +145,4 @@ namespace QuantumIdleModels.Entities
     }
 }
 
+

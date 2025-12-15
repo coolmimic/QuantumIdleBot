@@ -29,6 +29,12 @@ namespace QuantumIdleModels.Entities
         /// </summary>
         public int AppUserId { get; set; }
 
+        /// <summary>
+        /// Telegram 消息 ID
+        /// <para>下注时发送的消息ID，用于匹配机器人回复确认下注结果</para>
+        /// </summary>
+        public int TgMsgId { get; set; }
+
         // ==========================================
         // 来源追踪
         // ==========================================

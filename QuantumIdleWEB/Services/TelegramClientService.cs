@@ -512,6 +512,48 @@ namespace QuantumIdleWEB.Services
                     // 使用第一个方案获取游戏类型（同一个群游戏类型应该相同）
                     var firstScheme = userSchemes.First().First();
                     var context = gameService.GetOrCreateContext(groupId, firstScheme.GameType);
+
+                    // ========================================
+                    // 优先检查：是否是机器人对我们下注消息的回复
+                    // ========================================
+                    if (msg.reply_to is TL.MessageReplyHeader replyHeader)
+                    {
+                        int repliedMsgId = replyHeader.reply_to_msg_id;
+                        
+                        // 查找对应的待确认订单（状态为 Confirmed = 4）
+                        var targetOrders = await dbContext.BetOrders
+                            .Where(o => o.TgMsgId == repliedMsgId && o.Status == 4)
+                            .ToListAsync();
+                        
+                        if (targetOrders.Count > 0)
+                        {
+                            // 解析机器人回复
+                            var parseResult = context.ParseBotReply(messageText);
+                            
+                            foreach (var order in targetOrders)
+                            {
+                                if (parseResult.IsSuccess)
+                                {
+                                    // 下注确认成功，状态流转为待结算
+                                    order.Status = 0; // PendingSettlement
+                                    gameService.AddLog($"[实盘] 下注确认成功 | 内容:{order.BetContent} | 余额:{parseResult.Balance}", order.AppUserId);
+                                }
+                                else
+                                {
+                                    // 下注失败
+                                    order.Status = 2; // BetFailed
+                                    gameService.AddLog($"[实盘] 下注失败 | 内容:{order.BetContent} | 原因:{parseResult.ErrorMessage}", order.AppUserId);
+                                }
+                            }
+                            
+                            await dbContext.SaveChangesAsync();
+                            return; // 已处理回复，不继续走后续逻辑
+                        }
+                    }
+
+                    // ========================================
+                    // 常规消息处理
+                    // ========================================
                     var messageState = context.ProcessMessage(messageText);
 
                     if (messageState == GameMessageState.Unknown)

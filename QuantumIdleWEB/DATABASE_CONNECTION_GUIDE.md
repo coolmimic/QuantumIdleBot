@@ -99,3 +99,4 @@ Server=.;Database=QuantumIdleDB;Integrated Security=True;TrustServerCertificate=
 3. **确保防火墙开放了 SQL Server 端口（默认 1433）**
 4. **确保用户名和密码正确**
 
+

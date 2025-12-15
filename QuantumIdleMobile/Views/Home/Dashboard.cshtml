@@ -280,6 +280,16 @@
     .log-item:nth-child(odd) {
         background: var(--bg-tertiary);
     }
+    .log-item.win {
+        color: #ff6b6b;      /* 红色 - 赢（中） */
+        font-weight: 600;
+    }
+    .log-item.lose {
+        color: #51cf66;      /* 绿色 - 输（挂） */
+    }
+    .log-item.error {
+        color: #f85149;
+    }
     .empty-text {
         text-align: center;
         color: var(--text-tertiary);
@@ -368,9 +378,20 @@
                 const container = document.getElementById('logContent');
                 
                 if (result.success && result.data && result.data.length > 0) {
-                    container.innerHTML = result.data.map(log => 
-                        `<div class="log-item">${log}</div>`
-                    ).join('');
+                    container.innerHTML = result.data.map(log => {
+                        let className = 'log-item';
+                        // 结算日志配色：红中绿挂
+                        if (log.includes('[结算]')) {
+                            if (log.includes('| 赢 |') || log.includes('|赢|')) {
+                                className += ' win';
+                            } else if (log.includes('| 输 |') || log.includes('|输|')) {
+                                className += ' lose';
+                            }
+                        } else if (log.includes('失败') || log.includes('错误')) {
+                            className += ' error';
+                        }
+                        return `<div class="${className}">${log}</div>`;
+                    }).join('');
                 } else {
                     container.innerHTML = '<p class="empty-text">暂无日志</p>';
                 }
