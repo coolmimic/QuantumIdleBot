@@ -1,0 +1,541 @@
+@{
+    ViewData["Title"] = "管理后台";
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>@ViewData["Title"] - QuantumIdle</title>
+    <link rel="stylesheet" href="~/css/mobile.css" />
+    <style>
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --text-primary: #f0f6fc;
+            --text-secondary: #8b949e;
+            --accent-color: #6c5ce7;
+            --success-color: #3fb950;
+            --error-color: #f85149;
+            --border-color: #30363d;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+        .header {
+            background: var(--bg-secondary);
+            padding: 16px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .header h1 { font-size: 18px; }
+        .content { padding: 16px; }
+        .nav-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            overflow-x: auto;
+            padding-bottom: 8px;
+        }
+        .nav-tab {
+            padding: 10px 16px;
+            background: var(--bg-tertiary);
+            border: none;
+            border-radius: 8px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            white-space: nowrap;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .nav-tab.active {
+            background: var(--accent-color);
+            color: white;
+        }
+        .card {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+            border: 1px solid var(--border-color);
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+        .stat-item {
+            background: var(--bg-tertiary);
+            padding: 16px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--accent-color);
+        }
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        th, td {
+            padding: 10px 8px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+        th { color: var(--text-secondary); font-weight: 500; }
+        .table-container { overflow-x: auto; }
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: var(--accent-color);
+            color: white;
+        }
+        .btn-sm { padding: 6px 12px; font-size: 12px; }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 16px;
+        }
+        .hidden { display: none; }
+        .form-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+        .form-group {
+            flex: 1;
+            min-width: 120px;
+        }
+        .form-group label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 8px 12px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+        .success { color: var(--success-color); }
+        .error { color: var(--error-color); }
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+        .badge-success { background: rgba(63, 185, 80, 0.2); color: var(--success-color); }
+        .badge-error { background: rgba(248, 81, 73, 0.2); color: var(--error-color); }
+        .generated-cards {
+            background: var(--bg-tertiary);
+            padding: 12px;
+            border-radius: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 13px;
+            margin-top: 12px;
+        }
+        .generated-cards div {
+            padding: 4px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🛠️ 管理后台</h1>
+        <button class="btn btn-sm" onclick="logout()">退出</button>
+    </div>
+    
+    <div class="content">
+        <!-- 导航标签 -->
+        <div class="nav-tabs">
+            <button class="nav-tab active" onclick="showTab('stats')">📊 概览</button>
+            <button class="nav-tab" onclick="showTab('users')">👥 用户</button>
+            <button class="nav-tab" onclick="showTab('cards')">🎫 卡密</button>
+            <button class="nav-tab" onclick="showTab('orders')">📝 注单</button>
+            <button class="nav-tab" onclick="showTab('schemes')">📋 方案</button>
+        </div>
+        
+        <!-- 统计概览 -->
+        <div id="tab-stats" class="tab-content">
+            <div class="card">
+                <h3 style="margin-bottom: 16px;">系统概览</h3>
+                <div class="stats-grid" id="statsGrid">
+                    <div class="stat-item"><div class="stat-value">-</div><div class="stat-label">用户总数</div></div>
+                    <div class="stat-item"><div class="stat-value">-</div><div class="stat-label">注单总数</div></div>
+                    <div class="stat-item"><div class="stat-value">-</div><div class="stat-label">今日注单</div></div>
+                    <div class="stat-item"><div class="stat-value">-</div><div class="stat-label">今日盈亏</div></div>
+                    <div class="stat-item"><div class="stat-value">-</div><div class="stat-label">卡密总数</div></div>
+                    <div class="stat-item"><div class="stat-value">-</div><div class="stat-label">未使用卡密</div></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 用户管理 -->
+        <div id="tab-users" class="tab-content hidden">
+            <div class="card">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>搜索用户名</label>
+                        <input type="text" id="userSearch" placeholder="输入用户名">
+                    </div>
+                    <button class="btn btn-primary" onclick="loadUsers()">搜索</button>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>用户名</th>
+                                <th>状态</th>
+                                <th>盈亏</th>
+                                <th>过期时间</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTable"></tbody>
+                    </table>
+                </div>
+                <div class="pagination" id="usersPagination"></div>
+            </div>
+        </div>
+        
+        <!-- 卡密管理 -->
+        <div id="tab-cards" class="tab-content hidden">
+            <div class="card">
+                <h3 style="margin-bottom: 16px;">生成卡密</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>数量</label>
+                        <input type="number" id="cardCount" value="1" min="1" max="100">
+                    </div>
+                    <div class="form-group">
+                        <label>天数</label>
+                        <input type="number" id="cardDays" value="30">
+                    </div>
+                    <div class="form-group">
+                        <label>批次备注</label>
+                        <input type="text" id="cardBatch" placeholder="可选">
+                    </div>
+                    <button class="btn btn-primary" onclick="generateCards()">生成</button>
+                </div>
+                <div id="generatedCards" class="generated-cards hidden"></div>
+            </div>
+            
+            <div class="card">
+                <h3 style="margin-bottom: 16px;">卡密列表</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>状态</label>
+                        <select id="cardFilter">
+                            <option value="">全部</option>
+                            <option value="false">未使用</option>
+                            <option value="true">已使用</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" onclick="loadCards()">筛选</button>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>卡密</th>
+                                <th>天数</th>
+                                <th>状态</th>
+                                <th>创建时间</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cardsTable"></tbody>
+                    </table>
+                </div>
+                <div class="pagination" id="cardsPagination"></div>
+            </div>
+        </div>
+        
+        <!-- 注单查询 -->
+        <div id="tab-orders" class="tab-content hidden">
+            <div class="card">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>用户ID</label>
+                        <input type="number" id="orderUserId" placeholder="可选">
+                    </div>
+                    <div class="form-group">
+                        <label>期号</label>
+                        <input type="text" id="orderIssue" placeholder="可选">
+                    </div>
+                    <button class="btn btn-primary" onclick="loadOrders()">查询</button>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>用户</th>
+                                <th>期号</th>
+                                <th>内容</th>
+                                <th>金额</th>
+                                <th>盈亏</th>
+                                <th>时间</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ordersTable"></tbody>
+                    </table>
+                </div>
+                <div class="pagination" id="ordersPagination"></div>
+            </div>
+        </div>
+        
+        <!-- 方案管理 -->
+        <div id="tab-schemes" class="tab-content hidden">
+            <div class="card">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>用户ID</label>
+                        <input type="number" id="schemeUserId" placeholder="可选">
+                    </div>
+                    <button class="btn btn-primary" onclick="loadSchemes()">查询</button>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>用户</th>
+                                <th>名称</th>
+                                <th>群组</th>
+                                <th>状态</th>
+                                <th>盈亏</th>
+                            </tr>
+                        </thead>
+                        <tbody id="schemesTable"></tbody>
+                    </table>
+                </div>
+                <div class="pagination" id="schemesPagination"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE_URL = window.location.origin;
+        const password = sessionStorage.getItem('adminPassword');
+        
+        if (!password) {
+            window.location.href = '/Admin/Login';
+        }
+        
+        let currentPage = { users: 1, cards: 1, orders: 1, schemes: 1 };
+        
+        // Tab 切换
+        function showTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
+            document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('tab-' + tabName).classList.remove('hidden');
+            event.target.classList.add('active');
+            
+            // 加载数据
+            if (tabName === 'stats') loadStats();
+            else if (tabName === 'users') loadUsers();
+            else if (tabName === 'cards') loadCards();
+            else if (tabName === 'orders') loadOrders();
+            else if (tabName === 'schemes') loadSchemes();
+        }
+        
+        // 加载统计
+        async function loadStats() {
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/admin/stats?password=${password}`);
+                const result = await res.json();
+                if (result.success) {
+                    const d = result.data;
+                    document.getElementById('statsGrid').innerHTML = `
+                        <div class="stat-item"><div class="stat-value">${d.userCount}</div><div class="stat-label">用户总数</div></div>
+                        <div class="stat-item"><div class="stat-value">${d.orderCount}</div><div class="stat-label">注单总数</div></div>
+                        <div class="stat-item"><div class="stat-value">${d.todayOrders}</div><div class="stat-label">今日注单</div></div>
+                        <div class="stat-item"><div class="stat-value ${d.todayProfit >= 0 ? 'success' : 'error'}">${d.todayProfit.toFixed(2)}</div><div class="stat-label">今日盈亏</div></div>
+                        <div class="stat-item"><div class="stat-value">${d.cardCount}</div><div class="stat-label">卡密总数</div></div>
+                        <div class="stat-item"><div class="stat-value">${d.unusedCardCount}</div><div class="stat-label">未使用卡密</div></div>
+                    `;
+                }
+            } catch (e) { console.error(e); }
+        }
+        
+        // 加载用户
+        async function loadUsers(page = 1) {
+            currentPage.users = page;
+            const search = document.getElementById('userSearch').value;
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/admin/users?password=${password}&page=${page}&size=20&search=${search}`);
+                const result = await res.json();
+                if (result.success) {
+                    document.getElementById('usersTable').innerHTML = result.data.map(u => `
+                        <tr>
+                            <td>${u.id}</td>
+                            <td>${u.userName}</td>
+                            <td><span class="badge ${u.isExpired ? 'badge-error' : 'badge-success'}">${u.isExpired ? '已过期' : '正常'}</span></td>
+                            <td class="${u.profit >= 0 ? 'success' : 'error'}">${u.profit.toFixed(2)}</td>
+                            <td>${new Date(u.expireTime).toLocaleDateString()}</td>
+                        </tr>
+                    `).join('');
+                    renderPagination('usersPagination', result.total, page, 20, 'loadUsers');
+                }
+            } catch (e) { console.error(e); }
+        }
+        
+        // 加载卡密
+        async function loadCards(page = 1) {
+            currentPage.cards = page;
+            const filter = document.getElementById('cardFilter').value;
+            let url = `${API_BASE_URL}/api/admin/cards?password=${password}&page=${page}&size=20`;
+            if (filter) url += `&isRedeemed=${filter}`;
+            try {
+                const res = await fetch(url);
+                const result = await res.json();
+                if (result.success) {
+                    document.getElementById('cardsTable').innerHTML = result.data.map(c => `
+                        <tr>
+                            <td style="font-family:monospace;font-size:11px">${c.keyCode}</td>
+                            <td>${c.durationDays}天</td>
+                            <td><span class="badge ${c.isRedeemed ? 'badge-error' : 'badge-success'}">${c.isRedeemed ? '已使用' : '未使用'}</span></td>
+                            <td>${new Date(c.createTime).toLocaleDateString()}</td>
+                        </tr>
+                    `).join('');
+                    renderPagination('cardsPagination', result.total, page, 20, 'loadCards');
+                }
+            } catch (e) { console.error(e); }
+        }
+        
+        // 生成卡密
+        async function generateCards() {
+            const count = parseInt(document.getElementById('cardCount').value) || 1;
+            const days = parseInt(document.getElementById('cardDays').value) || 30;
+            const batch = document.getElementById('cardBatch').value;
+            
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/admin/cards/generate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password, count, durationDays: days, batchName: batch })
+                });
+                const result = await res.json();
+                if (result.success) {
+                    const container = document.getElementById('generatedCards');
+                    container.classList.remove('hidden');
+                    container.innerHTML = result.data.map(k => `<div>${k}</div>`).join('');
+                    loadCards();
+                } else {
+                    alert(result.message);
+                }
+            } catch (e) { alert('生成失败'); }
+        }
+        
+        // 加载注单
+        async function loadOrders(page = 1) {
+            currentPage.orders = page;
+            const userId = document.getElementById('orderUserId').value;
+            const issue = document.getElementById('orderIssue').value;
+            let url = `${API_BASE_URL}/api/admin/orders?password=${password}&page=${page}&size=20`;
+            if (userId) url += `&userId=${userId}`;
+            if (issue) url += `&issueNumber=${issue}`;
+            try {
+                const res = await fetch(url);
+                const result = await res.json();
+                if (result.success) {
+                    document.getElementById('ordersTable').innerHTML = result.data.map(o => `
+                        <tr>
+                            <td>${o.id}</td>
+                            <td>${o.appUserId}</td>
+                            <td>${o.issueNumber || '-'}</td>
+                            <td>${o.betContent}</td>
+                            <td>${o.amount}</td>
+                            <td class="${o.profit >= 0 ? 'success' : 'error'}">${o.profit.toFixed(2)}</td>
+                            <td>${new Date(o.betTime).toLocaleString()}</td>
+                        </tr>
+                    `).join('');
+                    renderPagination('ordersPagination', result.total, page, 20, 'loadOrders');
+                }
+            } catch (e) { console.error(e); }
+        }
+        
+        // 加载方案
+        async function loadSchemes(page = 1) {
+            currentPage.schemes = page;
+            const userId = document.getElementById('schemeUserId').value;
+            let url = `${API_BASE_URL}/api/admin/schemes?password=${password}&page=${page}&size=20`;
+            if (userId) url += `&userId=${userId}`;
+            try {
+                const res = await fetch(url);
+                const result = await res.json();
+                if (result.success) {
+                    document.getElementById('schemesTable').innerHTML = result.data.map(s => `
+                        <tr>
+                            <td>${s.id}</td>
+                            <td>${s.userId}</td>
+                            <td>${s.name}</td>
+                            <td>${s.tgGroupName || s.tgGroupId}</td>
+                            <td><span class="badge ${s.isEnabled ? 'badge-success' : 'badge-error'}">${s.isEnabled ? '启用' : '禁用'}</span></td>
+                            <td class="${s.profit >= 0 ? 'success' : 'error'}">${s.profit.toFixed(2)}</td>
+                        </tr>
+                    `).join('');
+                    renderPagination('schemesPagination', result.total, page, 20, 'loadSchemes');
+                }
+            } catch (e) { console.error(e); }
+        }
+        
+        // 分页渲染
+        function renderPagination(containerId, total, page, size, loadFn) {
+            const totalPages = Math.ceil(total / size);
+            if (totalPages <= 1) {
+                document.getElementById(containerId).innerHTML = '';
+                return;
+            }
+            let html = '';
+            if (page > 1) html += `<button class="btn btn-sm" onclick="${loadFn}(${page - 1})">上一页</button>`;
+            html += `<span style="padding:8px;color:var(--text-secondary)">${page} / ${totalPages}</span>`;
+            if (page < totalPages) html += `<button class="btn btn-sm" onclick="${loadFn}(${page + 1})">下一页</button>`;
+            document.getElementById(containerId).innerHTML = html;
+        }
+        
+        function logout() {
+            sessionStorage.removeItem('adminPassword');
+            window.location.href = '/Admin/Login';
+        }
+        
+        // 初始加载
+        loadStats();
+    </script>
+</body>
+</html>
