@@ -21,9 +21,38 @@ namespace QuantumIdleWEB.Services
             set => _currentUserId.Value = value;
         }
 
-        // 全局状态（per-user状态存储在数据库中）
-        public bool IsRunning { get; set; } = false;
-        public bool IsSimulation { get; set; } = false;
+        // ========== 按用户隔离的状态 ==========
+        private readonly ConcurrentDictionary<int, bool> _userRunningState = new();
+        private readonly ConcurrentDictionary<int, bool> _userSimulationState = new();
+
+        /// <summary>
+        /// 获取/设置指定用户的运行状态
+        /// </summary>
+        public bool IsRunning
+        {
+            get => _userRunningState.GetValueOrDefault(CurrentUserId, false);
+            set => _userRunningState[CurrentUserId] = value;
+        }
+
+        /// <summary>
+        /// 获取/设置指定用户的模拟模式状态
+        /// </summary>
+        public bool IsSimulation
+        {
+            get => _userSimulationState.GetValueOrDefault(CurrentUserId, false);
+            set => _userSimulationState[CurrentUserId] = value;
+        }
+
+        /// <summary>
+        /// 为指定用户ID获取运行状态（不依赖CurrentUserId）
+        /// </summary>
+        public bool GetIsRunning(int userId) => _userRunningState.GetValueOrDefault(userId, false);
+        public void SetIsRunning(int userId, bool value) => _userRunningState[userId] = value;
+        
+        public bool GetIsSimulation(int userId) => _userSimulationState.GetValueOrDefault(userId, false);
+        public void SetIsSimulation(int userId, bool value) => _userSimulationState[userId] = value;
+
+        // 全局统计（向后兼容）
         public decimal Balance { get; set; } = 0;
         public decimal Profit { get; set; } = 0;
         public decimal Turnover { get; set; } = 0;

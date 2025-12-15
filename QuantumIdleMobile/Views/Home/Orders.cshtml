@@ -190,6 +190,15 @@
     .profit-positive { color: #ff6b6b; }  /* 红色 - 盈利（中） */
     .profit-negative { color: #51cf66; }  /* 绿色 - 亏损（挂） */
     
+    .sim-tag {
+        font-size: 10px;
+        padding: 1px 4px;
+        background: rgba(250, 173, 20, 0.3);
+        color: var(--warning-color);
+        border-radius: 4px;
+        margin-left: 4px;
+    }
+    
     .pagination {
         display: flex;
         justify-content: space-between;
@@ -286,11 +295,25 @@
                     const isWin = isSettled && profit > 0;
                     const isLose = isSettled && profit < 0;
                     const itemClass = isWin ? 'win' : (isLose ? 'lose' : 'pending');
-                    const statusText = isSettled ? '已结算' : '待结算';
-                    const statusClass = isSettled ? 'settled' : 'pending';
+                    
+                    // 状态显示：中/挂/待结算
+                    let statusText, statusClass;
+                    if (!isSettled) {
+                        statusText = '待结算';
+                        statusClass = 'pending';
+                    } else if (isWin) {
+                        statusText = '中';
+                        statusClass = 'win';
+                    } else {
+                        statusText = '挂';
+                        statusClass = 'lose';
+                    }
                     
                     const profitClass = profit >= 0 ? 'profit-positive' : 'profit-negative';
                     const profitDisplay = profit >= 0 ? `+${profit.toFixed(2)}` : profit.toFixed(2);
+                    
+                    // 模拟/实盘标记
+                    const simTag = order.isSimulation ? '<span class="sim-tag">模拟</span>' : '';
                     
                     html += `
                         <div class="order-item ${itemClass}">
@@ -302,7 +325,7 @@
                                     </div>
                                     <div class="field">
                                         <span class="label">方案</span>
-                                        <span class="value">${schemeName}</span>
+                                        <span class="value">${schemeName}${simTag}</span>
                                     </div>
                                 </div>
                                 <div class="order-row">
@@ -325,8 +348,7 @@
                                 </div>
                             </div>
                             <div class="order-right">
-                                <span class="order-profit ${profitClass}">${profitDisplay}</span>
-                                <span class="order-status ${statusClass}">${statusText}</span>
+                                <span class="order-profit ${profitClass}">${statusText} ${profitDisplay}</span>
                             </div>
                         </div>
                     `;

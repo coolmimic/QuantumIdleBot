@@ -61,7 +61,7 @@ namespace QuantumIdleWEB.Services
                 }
 
                 // 3. 执行下注
-                if (_gameService.IsSimulation)
+                if (_gameService.GetIsSimulation(userId))
                 {
                     // 模拟：直接保存
                     await SaveOrders(dbContext, orders);
@@ -145,7 +145,7 @@ namespace QuantumIdleWEB.Services
                         PayoutAmount = 0,
                         Profit = 0,
                         Status = (int)OrderStatus.PendingSettlement,
-                        IsSimulation = _gameService.IsSimulation,
+                        IsSimulation = _gameService.GetIsSimulation(userId),
                         BetTime = DateTime.Now
                     };
 
