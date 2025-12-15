@@ -14,14 +14,16 @@ namespace QuantumIdleWEB.Controllers.API
     {
         private readonly ApplicationDbContext _context;
         private readonly ILogger<AdminController> _logger;
+        private readonly QuantumIdleWEB.Services.CaptchaService _captchaService;
 
         // 管理员密码
         private static readonly string[] AdminPasswords = { "mimic998", "adb168" };
 
-        public AdminController(ApplicationDbContext context, ILogger<AdminController> logger)
+        public AdminController(ApplicationDbContext context, ILogger<AdminController> logger, QuantumIdleWEB.Services.CaptchaService captchaService)
         {
             _context = context;
             _logger = logger;
+            _captchaService = captchaService;
         }
 
         /// <summary>
@@ -42,6 +44,16 @@ namespace QuantumIdleWEB.Controllers.API
         [HttpPost("login")]
         public IActionResult Login([FromBody] AdminLoginRequest request)
         {
+            // 验证码验证
+            if (string.IsNullOrEmpty(request.CaptchaId) || string.IsNullOrEmpty(request.CaptchaCode))
+            {
+                return BadRequest(new { success = false, message = "请输入验证码" });
+            }
+            if (!_captchaService.Validate(request.CaptchaId, request.CaptchaCode))
+            {
+                return BadRequest(new { success = false, message = "验证码错误或已过期" });
+            }
+
             if (ValidateAdmin(request.Password))
             {
                 return Ok(new { success = true, message = "登录成功" });
@@ -314,6 +326,8 @@ namespace QuantumIdleWEB.Controllers.API
     public class AdminLoginRequest
     {
         public string Password { get; set; }
+        public string? CaptchaId { get; set; }
+        public string? CaptchaCode { get; set; }
     }
 
     public class GenerateCardsRequest

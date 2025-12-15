@@ -158,6 +158,16 @@ namespace QuantumIdleWEB.Controllers.API
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] UserLoginRequest request)
         {
+            // 0. 验证码验证
+            if (string.IsNullOrEmpty(request.CaptchaId) || string.IsNullOrEmpty(request.CaptchaCode))
+            {
+                return BadRequest(new { success = false, message = "请输入验证码" });
+            }
+            if (!_captchaService.Validate(request.CaptchaId, request.CaptchaCode))
+            {
+                return BadRequest(new { success = false, message = "验证码错误或已过期" });
+            }
+
             // 1. 查找用户
             var user = await _context.Users
                 .FirstOrDefaultAsync(u => u.UserName == request.UserName);
@@ -205,6 +215,16 @@ namespace QuantumIdleWEB.Controllers.API
         [HttpPost("reset-password")]
         public async Task<IActionResult> ResetPassword([FromBody] UserResetPwdRequest request)
         {
+            // 0. 验证码验证
+            if (string.IsNullOrEmpty(request.CaptchaId) || string.IsNullOrEmpty(request.CaptchaCode))
+            {
+                return BadRequest(new { success = false, message = "请输入验证码" });
+            }
+            if (!_captchaService.Validate(request.CaptchaId, request.CaptchaCode))
+            {
+                return BadRequest(new { success = false, message = "验证码错误或已过期" });
+            }
+
             var user = await _context.Users
                 .FirstOrDefaultAsync(u => u.UserName == request.UserName);
 

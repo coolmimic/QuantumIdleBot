@@ -22,6 +22,17 @@
                 <input type="password" id="password" name="password" class="form-input" 
                        placeholder="请输入密码" required autocomplete="current-password" />
             </div>
+
+            <div class="form-group">
+                <label for="captcha">验证码</label>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <input type="text" id="captcha" name="captcha" class="form-input" 
+                           placeholder="请输入验证码" required style="flex: 1;" maxlength="4" />
+                    <img id="captchaImage" src="" alt="验证码" 
+                         style="height: 40px; cursor: pointer; border-radius: 4px; background: #f0f0f0;" 
+                         title="点击刷新验证码" onclick="refreshCaptcha()" />
+                </div>
+            </div>
             
             <div class="form-group">
                 <button type="submit" class="btn btn-primary btn-block" id="loginBtn">
@@ -41,7 +52,7 @@
                 <a href="/Home/ResetPassword">🔄 重置密码</a>
             </div>
             <div class="admin-link" style="margin-top: 16px;">
-                <a href="/Home/AdminCard" style="color: var(--text-tertiary); font-size: 12px;">管理员入口</a>
+                <a href="/Admin/Login" style="color: var(--text-tertiary); font-size: 12px;">管理员入口</a>
             </div>
         </div>
     </div>
@@ -78,6 +89,23 @@
     }
     
     let isSubmitting = false;
+    let currentCaptchaId = '';
+
+    // 页面加载时获取验证码
+    document.addEventListener('DOMContentLoaded', refreshCaptcha);
+
+    async function refreshCaptcha() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/user/captcha`);
+            const result = await response.json();
+            if (result.success) {
+                currentCaptchaId = result.data.captchaId;
+                document.getElementById('captchaImage').src = result.data.image;
+            }
+        } catch (error) {
+            console.error('获取验证码失败:', error);
+        }
+    }
 
     document.getElementById('loginForm').addEventListener('submit', async function(e) {
         e.preventDefault();
@@ -86,11 +114,18 @@
 
         const username = document.getElementById('username').value.trim();
         const password = document.getElementById('password').value;
+        const captchaCode = document.getElementById('captcha').value.trim();
         const errorDiv = document.getElementById('errorMessage');
         const loginBtn = document.getElementById('loginBtn');
         const originalBtnText = loginBtn.textContent;
         
         errorDiv.style.display = 'none';
+
+        if (!captchaCode || captchaCode.length !== 4) {
+            errorDiv.textContent = '请输入4位验证码';
+            errorDiv.style.display = 'block';
+            return;
+        }
         
         isSubmitting = true;
         loginBtn.disabled = true;
@@ -102,7 +137,12 @@
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ userName: username, password: password })
+                body: JSON.stringify({ 
+                    userName: username, 
+                    password: password,
+                    captchaId: currentCaptchaId,
+                    captchaCode: captchaCode
+                })
             });
             
             const result = await response.json();
@@ -118,10 +158,13 @@
             } else {
                 errorDiv.textContent = result.message || '登录失败';
                 errorDiv.style.display = 'block';
+                refreshCaptcha();
+                document.getElementById('captcha').value = '';
             }
         } catch (error) {
             errorDiv.textContent = '网络错误，请稍后重试';
             errorDiv.style.display = 'block';
+            refreshCaptcha();
         } finally {
             loginBtn.disabled = false;
             loginBtn.textContent = originalBtnText;

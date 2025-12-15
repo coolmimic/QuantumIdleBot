@@ -58,6 +58,7 @@
             font-size: 16px;
             outline: none;
             transition: all 0.3s;
+            box-sizing: border-box;
         }
         .form-group input:focus {
             border-color: #6c5ce7;
@@ -91,6 +92,20 @@
             font-size: 14px;
             display: none;
         }
+        .captcha-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .captcha-row input {
+            flex: 1;
+        }
+        .captcha-row img {
+            height: 46px;
+            cursor: pointer;
+            border-radius: 8px;
+            background: #f0f0f0;
+        }
     </style>
 </head>
 <body>
@@ -105,6 +120,14 @@
                 <label for="password">管理员密码</label>
                 <input type="password" id="password" name="password" placeholder="请输入密码" required />
             </div>
+
+            <div class="form-group">
+                <label for="captcha">验证码</label>
+                <div class="captcha-row">
+                    <input type="text" id="captcha" name="captcha" placeholder="请输入验证码" required maxlength="4" />
+                    <img id="captchaImage" src="" alt="验证码" title="点击刷新" onclick="refreshCaptcha()" />
+                </div>
+            </div>
             
             <button type="submit" class="btn-login" id="loginBtn">登 录</button>
             
@@ -114,13 +137,36 @@
     
     <script>
         const API_BASE_URL = window.location.origin;
+        let currentCaptchaId = '';
+
+        document.addEventListener('DOMContentLoaded', refreshCaptcha);
+
+        async function refreshCaptcha() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/user/captcha`);
+                const result = await response.json();
+                if (result.success) {
+                    currentCaptchaId = result.data.captchaId;
+                    document.getElementById('captchaImage').src = result.data.image;
+                }
+            } catch (error) {
+                console.error('获取验证码失败:', error);
+            }
+        }
         
         document.getElementById('loginForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
             const password = document.getElementById('password').value;
+            const captchaCode = document.getElementById('captcha').value.trim();
             const btn = document.getElementById('loginBtn');
             const errorMsg = document.getElementById('errorMsg');
+
+            if (!captchaCode || captchaCode.length !== 4) {
+                errorMsg.textContent = '请输入4位验证码';
+                errorMsg.style.display = 'block';
+                return;
+            }
             
             btn.disabled = true;
             btn.textContent = '登录中...';
@@ -130,22 +176,28 @@
                 const response = await fetch(`${API_BASE_URL}/api/admin/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password })
+                    body: JSON.stringify({ 
+                        password,
+                        captchaId: currentCaptchaId,
+                        captchaCode: captchaCode
+                    })
                 });
                 
                 const result = await response.json();
                 
                 if (result.success) {
-                    // 保存密码到 sessionStorage
                     sessionStorage.setItem('adminPassword', password);
                     window.location.href = '/Admin/Index';
                 } else {
                     errorMsg.textContent = result.message || '登录失败';
                     errorMsg.style.display = 'block';
+                    refreshCaptcha();
+                    document.getElementById('captcha').value = '';
                 }
             } catch (error) {
                 errorMsg.textContent = '网络错误，请重试';
                 errorMsg.style.display = 'block';
+                refreshCaptcha();
             } finally {
                 btn.disabled = false;
                 btn.textContent = '登 录';

@@ -16,5 +16,9 @@ namespace QuantumIdleModels.DTOs
         [Required]
         [MinLength(6)]
         public string NewPassword { get; set; }
+
+        // 验证码相关
+        public string? CaptchaId { get; set; }
+        public string? CaptchaCode { get; set; }
     }
 }
