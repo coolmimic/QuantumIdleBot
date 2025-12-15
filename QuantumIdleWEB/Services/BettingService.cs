@@ -67,6 +67,12 @@ namespace QuantumIdleWEB.Services
                     // 模拟：直接保存
                     await SaveOrders(dbContext, orders);
                     
+                    // 将订单加入缓存（用于开奖时查询）
+                    foreach (var order in orders)
+                    {
+                        _gameService.AddOrder(order);
+                    }
+                    
                     // 查询用户名用于日志显示
                     var user = await dbContext.Users.FindAsync(userId);
                     var userName = user?.UserName ?? $"用户#{userId}";
