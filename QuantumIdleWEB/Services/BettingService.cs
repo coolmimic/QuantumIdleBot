@@ -135,6 +135,7 @@ namespace QuantumIdleWEB.Services
                     var order = new BetOrder
                     {
                         AppUserId = userId,
+                        TgGroupId = scheme.TgGroupId,  // 记录群组ID
                         SourceRefId = Guid.NewGuid().ToString("N").Substring(0, 16),
                         SchemeId = scheme.Id.ToString(),
                         IssueNumber = issueNum,
@@ -213,6 +214,12 @@ namespace QuantumIdleWEB.Services
                 }
 
                 await SaveOrders(dbContext, orders);
+                
+                // 4. 将订单加入缓存（用于加速结算查询）
+                foreach (var order in orders)
+                {
+                    _gameService.AddOrder(order);
+                }
             }
             catch (Exception ex)
             {

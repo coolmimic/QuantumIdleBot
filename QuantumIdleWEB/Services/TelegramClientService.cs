@@ -483,35 +483,11 @@ namespace QuantumIdleWEB.Services
                 var messageText = msg.message;
                 if (string.IsNullOrEmpty(messageText)) return;
 
-                // 获取服务
-                var gameService = _serviceProvider.GetRequiredService<GameContextService>();
-                
-                // 检查挂机状态
-                if (!gameService.GetIsRunning(userId))
-                {
-                    return;
-                }
-
                 try
                 {
-                    // 查找该群对应的所有用户的启用方案
                     using var scope = _serviceProvider.CreateScope();
                     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-                    
-                    // 仅获取当前用户的启用方案
-                    var userSchemes = await dbContext.Schemes
-                        .Where(s => s.TgGroupId == groupId && s.IsEnabled && s.UserId == userId)
-                        .GroupBy(s => s.UserId)
-                        .ToListAsync();
-                    
-                    if (userSchemes.Count == 0)
-                    {
-                        return; // 没有任何用户配置方案
-                    }
-
-                    // 使用第一个方案获取游戏类型（同一个群游戏类型应该相同）
-                    var firstScheme = userSchemes.First().First();
-                    var context = gameService.GetOrCreateContext(groupId, firstScheme.GameType);
+                    var gameService = _serviceProvider.GetRequiredService<GameContextService>();
 
                     // ========================================
                     // 优先检查：是否是机器人对我们下注消息的回复
@@ -527,6 +503,10 @@ namespace QuantumIdleWEB.Services
                         
                         if (targetOrders.Count > 0)
                         {
+                            // 获取游戏类型来解析回复
+                            var firstOrder = targetOrders.First();
+                            var context = gameService.GetOrCreateContext(groupId, firstOrder.GameType);
+                            
                             // 解析机器人回复
                             var parseResult = context.ParseBotReply(messageText);
                             
@@ -552,55 +532,90 @@ namespace QuantumIdleWEB.Services
                     }
 
                     // ========================================
-                    // 常规消息处理
+                    // 查询该群是否有任何启用的方案（用于确定游戏类型）
                     // ========================================
-                    var messageState = context.ProcessMessage(messageText);
+                    var anyScheme = await dbContext.Schemes
+                        .FirstOrDefaultAsync(s => s.TgGroupId == groupId && s.IsEnabled);
+                    
+                    if (anyScheme == null)
+                    {
+                        return; // 该群没有任何启用的方案
+                    }
+
+                    var gameContext = gameService.GetOrCreateContext(groupId, anyScheme.GameType);
+
+                    // ========================================
+                    // 常规消息处理（消息去重在 ProcessMessage 内部）
+                    // ========================================
+                    var messageState = gameContext.ProcessMessage(messageText);
 
                     if (messageState == GameMessageState.Unknown)
                     {
                         return;
                     }
 
-                    // 消息类型日志已移除
-
-                    // 根据消息类型执行对应逻辑，为每个用户独立处理
+                    // 根据消息类型执行对应逻辑
                     switch (messageState)
                     {
                         case GameMessageState.StartBetting:
-                            // 为每个用户触发投注
+                            // ========================================
+                            // 销售信息：查询所有符合条件的方案
+                            // 条件：群ID匹配 && 启用 && 用户挂机中
+                            // ========================================
+                            var activeSchemes = await dbContext.Schemes
+                                .Where(s => s.TgGroupId == groupId && s.IsEnabled)
+                                .ToListAsync();
+                            
+                            // 按用户分组，只处理正在挂机的用户
+                            var schemesByUser = activeSchemes
+                                .GroupBy(s => s.UserId)
+                                .Where(g => gameService.GetIsRunning(g.Key))
+                                .ToList();
+
+                            if (schemesByUser.Count == 0)
+                            {
+                                return;
+                            }
+
                             var bettingService = scope.ServiceProvider.GetRequiredService<BettingService>();
-                            foreach (var userGroup in userSchemes)
+                            foreach (var userGroup in schemesByUser)
                             {
                                 var loopUserId = userGroup.Key;
-                                gameService.AddLog($"[{groupId}] 开始销售 期号: {context.CurrentIssue}", loopUserId);
-                                // 获取方案名用于日志
+                                gameService.AddLog($"[{groupId}] 开始销售 期号: {gameContext.CurrentIssue}", loopUserId);
                                 var schemeNames = string.Join(",", userGroup.Select(s => s.Name));
                                 gameService.AddLog($"[{groupId}] 处理方案: {schemeNames}", loopUserId);
-                                await bettingService.ProcessBetting(groupId, context, loopUserId);
+                                await bettingService.ProcessBetting(groupId, gameContext, loopUserId);
                             }
                             break;
 
                         case GameMessageState.LotteryResult:
-                            // 触发结算
-                            var lastRecord = context.History.FirstOrDefault();
-                            if (lastRecord != null)
+                            // ========================================
+                            // 开奖信息：直接查询待结算订单
+                            // 不依赖用户挂机状态（订单已下，必须结算）
+                            // ========================================
+                            var lastRecord = gameContext.History.FirstOrDefault();
+                            if (lastRecord == null)
                             {
-                                var settlementService = scope.ServiceProvider.GetRequiredService<SettlementService>();
-                                // 为每个用户触发结算
-                                foreach (var userGroup in userSchemes)
-                                {
-                                    var loopUserId = userGroup.Key;
-                                    gameService.AddLog($"[{groupId}] 开奖结果 期号: {lastRecord.IssueNumber} 结果: {lastRecord.Result}", loopUserId);
-                                    await settlementService.ProcessSettlement(groupId, lastRecord.IssueNumber, lastRecord.Result, loopUserId);
-                                }
+                                _logger.LogWarning($"[{groupId}] 开奖消息解析失败，无法获取期号和结果");
+                                return;
                             }
-                            else
+
+                            // 查询所有待结算的订单（从缓存中获取，避免查库）
+                            var pendingOrders = gameService.GetPendingOrders(groupId, lastRecord.IssueNumber);
+
+                            if (pendingOrders.Count == 0)
                             {
-                                // 无法确定用户，记录到所有相关用户
-                                foreach (var userGroup in userSchemes)
-                                {
-                                    gameService.AddLog($"[{groupId}] 开奖消息解析失败，无法获取期号和结果", userGroup.Key);
-                                }
+                                return; // 没有需要结算的订单
+                            }
+
+                            // 提取需要结算的用户ID
+                            var distinctUserIds = pendingOrders.Select(o => o.AppUserId).Distinct().ToList();
+
+                            var settlementService = scope.ServiceProvider.GetRequiredService<SettlementService>();
+                            foreach (var orderUserId in distinctUserIds)
+                            {
+                                gameService.AddLog($"[{groupId}] 开奖结果 期号: {lastRecord.IssueNumber} 结果: {lastRecord.Result}", orderUserId);
+                                await settlementService.ProcessSettlement(groupId, lastRecord.IssueNumber, lastRecord.Result, orderUserId);
                             }
                             break;
                     }
@@ -608,7 +623,6 @@ namespace QuantumIdleWEB.Services
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, $"处理消息时出错: 群组 {groupId}");
-                    // 注意：userSchemes 在 catch 块中不可用（作用域限制）
                 }
             }
         }

@@ -57,6 +57,12 @@ namespace QuantumIdleWEB.Services
                 }
 
                 await dbContext.SaveChangesAsync();
+
+                // 3. 从缓存中移除已结算的订单
+                foreach (var order in pendingOrders)
+                {
+                    _gameService.RemoveOrder(order.Id, order.TgGroupId);
+                }
             }
             catch (Exception ex)
             {

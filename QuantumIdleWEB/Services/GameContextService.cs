@@ -37,6 +37,59 @@ namespace QuantumIdleWEB.Services
 
         private readonly ConcurrentDictionary<int, UserGameState> _userStates = new();
 
+        // ========== 订单缓存 ==========
+        // Key: GroupId, Value: 该群组下的待结算订单列表
+        private readonly ConcurrentDictionary<long, List<BetOrder>> _activeOrders = new();
+
+        /// <summary>
+        /// 添加订单到缓存
+        /// </summary>
+        public void AddOrder(BetOrder order)
+        {
+            var groupOrders = _activeOrders.GetOrAdd(order.TgGroupId, _ => new List<BetOrder>());
+            lock (groupOrders)
+            {
+                groupOrders.Add(order);
+            }
+        }
+
+        /// <summary>
+        /// 获取待结算订单（从缓存）
+        /// </summary>
+        public List<BetOrder> GetPendingOrders(long groupId, string issueNumber)
+        {
+            if (_activeOrders.TryGetValue(groupId, out var groupOrders))
+            {
+                lock (groupOrders)
+                {
+                    // 筛选符合期号且状态为待结算或已确认的订单
+                    return groupOrders
+                        .Where(o => o.IssueNumber == issueNumber && 
+                                   (o.Status == 0 || o.Status == 4))
+                        .ToList();
+                }
+            }
+            return new List<BetOrder>();
+        }
+
+        /// <summary>
+        /// 从缓存中移除订单
+        /// </summary>
+        public void RemoveOrder(long orderId, long groupId)
+        {
+            if (_activeOrders.TryGetValue(groupId, out var groupOrders))
+            {
+                lock (groupOrders)
+                {
+                    var order = groupOrders.FirstOrDefault(o => o.Id == orderId);
+                    if (order != null)
+                    {
+                        groupOrders.Remove(order);
+                    }
+                }
+            }
+        }
+
         /// <summary>
         /// 获取指定用户的状态对象（不存在则创建）
         /// </summary>

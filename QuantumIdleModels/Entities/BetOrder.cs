@@ -35,6 +35,12 @@ namespace QuantumIdleModels.Entities
         /// </summary>
         public int TgMsgId { get; set; }
 
+        /// <summary>
+        /// Telegram 群组 ID
+        /// <para>订单所属的群组ID，用于开奖时精确匹配</para>
+        /// </summary>
+        public long TgGroupId { get; set; }
+
         // ==========================================
         // 来源追踪
         // ==========================================

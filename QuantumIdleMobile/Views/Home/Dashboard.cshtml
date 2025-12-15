@@ -652,11 +652,23 @@
         }
     }
     
-    function logout() {
-        localStorage.removeItem('token');
-        localStorage.removeItem('userName');
-        localStorage.removeItem('userInfo');
-        window.location.href = '/Home/Login';
+    async function logout() {
+        if (confirm('确定要退出登录吗？\n\n注意：这将同时断开 Telegram 连接。')) {
+            try {
+                // 尝试断开 Telegram 连接
+                await fetch(`${API_BASE_URL}/telegram/disconnect`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+            } catch (error) {
+                console.error('断开 Telegram 失败:', error);
+            }
+            
+            localStorage.removeItem('token');
+            localStorage.removeItem('userName');
+            localStorage.removeItem('userInfo');
+            window.location.href = '/Home/Login';
+        }
     }
 </script>
 }
