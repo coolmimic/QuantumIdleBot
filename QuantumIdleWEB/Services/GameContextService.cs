@@ -1,5 +1,6 @@
 using QuantumIdleWEB.GameCore;
 using System.Collections.Concurrent;
+using QuantumIdleModels.Entities;
 
 namespace QuantumIdleWEB.Services
 {
