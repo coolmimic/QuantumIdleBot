@@ -31,28 +31,101 @@ namespace QuantumIdleWEB.Controllers.API
             return DateTime.Now.ToString();
         }
 
+        // ========================================
+        // 注册安全防护：IP 限流
+        // ========================================
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTime LastTime, int Count)> _registerAttempts = new();
+        private const int MAX_REGISTER_PER_MINUTE = 3; // 每个 IP 每分钟最多注册 3 次
+        private const int MIN_USERNAME_LENGTH = 4;
+        private const int MAX_USERNAME_LENGTH = 20;
+
         /// <summary>
-        /// 注册接口
+        /// 注册接口（含安全防护）
         /// </summary>
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] UserLoginRequest request)
         {
-            // 1. 检查用户名是否已存在
-            if (await _context.Users.AnyAsync(u => u.UserName == request.UserName))
+            // 0. 获取客户端 IP
+            var clientIp = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            var forwardedFor = HttpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault();
+            if (!string.IsNullOrEmpty(forwardedFor))
+            {
+                clientIp = forwardedFor.Split(',').First().Trim();
+            }
+
+            // 1. IP 限流检查
+            var now = DateTime.Now;
+            if (_registerAttempts.TryGetValue(clientIp, out var attempt))
+            {
+                if ((now - attempt.LastTime).TotalMinutes < 1)
+                {
+                    if (attempt.Count >= MAX_REGISTER_PER_MINUTE)
+                    {
+                        return BadRequest(new { success = false, message = "注册过于频繁，请稍后再试" });
+                    }
+                    _registerAttempts[clientIp] = (attempt.LastTime, attempt.Count + 1);
+                }
+                else
+                {
+                    _registerAttempts[clientIp] = (now, 1);
+                }
+            }
+            else
+            {
+                _registerAttempts[clientIp] = (now, 1);
+            }
+
+            // 2. 用户名格式验证
+            if (string.IsNullOrWhiteSpace(request.UserName))
+            {
+                return BadRequest(new { success = false, message = "用户名不能为空" });
+            }
+
+            var userName = request.UserName.Trim();
+            
+            if (userName.Length < MIN_USERNAME_LENGTH || userName.Length > MAX_USERNAME_LENGTH)
+            {
+                return BadRequest(new { success = false, message = $"用户名长度需在 {MIN_USERNAME_LENGTH}-{MAX_USERNAME_LENGTH} 个字符之间" });
+            }
+
+            // 只允许字母、数字、下划线、中文
+            if (!System.Text.RegularExpressions.Regex.IsMatch(userName, @"^[\w\u4e00-\u9fa5]+$"))
+            {
+                return BadRequest(new { success = false, message = "用户名只能包含字母、数字、下划线或中文" });
+            }
+
+            // 禁止纯数字用户名和 "user" 开头的用户名（防止批量注册）
+            if (System.Text.RegularExpressions.Regex.IsMatch(userName, @"^\d+$"))
+            {
+                return BadRequest(new { success = false, message = "用户名不能为纯数字" });
+            }
+            if (userName.ToLower().StartsWith("user") && userName.Length > 6)
+            {
+                return BadRequest(new { success = false, message = "用户名格式不合法" });
+            }
+
+            // 3. 密码验证
+            if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 6)
+            {
+                return BadRequest(new { success = false, message = "密码长度不能少于 6 位" });
+            }
+
+            // 4. 检查用户名是否已存在
+            if (await _context.Users.AnyAsync(u => u.UserName == userName))
             {
                 return BadRequest(new { success = false, message = "用户名已存在" });
             }
 
-            // 2. 创建用户实体
+            // 5. 创建用户实体
             var newUser = new AppUser
             {
-                UserName = request.UserName,
+                UserName = userName,
                 PasswordHash = ComputeHash(request.Password),
                 CreateTime = DateTime.Now,
                 IsActive = 0
             };
 
-            // 3. 保存到数据库
+            // 6. 保存到数据库
             _context.Users.Add(newUser);
             await _context.SaveChangesAsync();
             return Ok(new { success = true, message = "注册成功" });
