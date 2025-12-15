@@ -104,6 +104,15 @@ BEGIN
     PRINT 'Created TelegramChats table';
 END
 
+-- ========== 4. BetOrders 表新增字段 ==========
+
+-- TgMsgId (Telegram 消息 ID)
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[BetOrders]') AND name = 'TgMsgId')
+BEGIN
+    ALTER TABLE [BetOrders] ADD [TgMsgId] INT NOT NULL DEFAULT 0;
+    PRINT 'Added BetOrders.TgMsgId';
+END
+
 -- ========== 完成 ==========
 
 PRINT '======================================';
