@@ -113,6 +113,13 @@ BEGIN
     PRINT 'Added BetOrders.TgMsgId';
 END
 
+-- TgGroupId (Telegram 群组 ID)
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[BetOrders]') AND name = 'TgGroupId')
+BEGIN
+    ALTER TABLE [BetOrders] ADD [TgGroupId] BIGINT NOT NULL DEFAULT 0;
+    PRINT 'Added BetOrders.TgGroupId';
+END
+
 -- ========== 完成 ==========
 
 PRINT '======================================';
