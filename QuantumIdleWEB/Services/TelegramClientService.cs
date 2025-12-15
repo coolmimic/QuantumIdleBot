@@ -205,7 +205,7 @@ namespace QuantumIdleWEB.Services
         /// </summary>
         private async Task<LoginResult> CompleteLogin(int userId, Client client, string phoneNumber, string userName)
         {
-            var updateManager = client.WithUpdateManager(OnUpdateReceived, GetUpdateStatePath(userId, userName));
+            var updateManager = client.WithUpdateManager(update => OnUpdateReceived(update, userId), GetUpdateStatePath(userId, userName));
             
             lock (_lock)
             {
@@ -456,7 +456,7 @@ namespace QuantumIdleWEB.Services
             }
         }
 
-        private async Task OnUpdateReceived(Update update)
+        private async Task OnUpdateReceived(Update update, int userId)
         {
             // 处理接收到的更新
             if (update is UpdateNewMessage messageUpdate && messageUpdate.message is TL.Message msg)
@@ -487,7 +487,7 @@ namespace QuantumIdleWEB.Services
                 var gameService = _serviceProvider.GetRequiredService<GameContextService>();
                 
                 // 检查挂机状态
-                if (!gameService.IsRunning)
+                if (!gameService.GetIsRunning(userId))
                 {
                     return;
                 }
@@ -498,9 +498,9 @@ namespace QuantumIdleWEB.Services
                     using var scope = _serviceProvider.CreateScope();
                     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
                     
-                    // 获取所有在该群启用方案的用户（按用户分组）
+                    // 仅获取当前用户的启用方案
                     var userSchemes = await dbContext.Schemes
-                        .Where(s => s.TgGroupId == groupId && s.IsEnabled)
+                        .Where(s => s.TgGroupId == groupId && s.IsEnabled && s.UserId == userId)
                         .GroupBy(s => s.UserId)
                         .ToListAsync();
                     
@@ -571,12 +571,12 @@ namespace QuantumIdleWEB.Services
                             var bettingService = scope.ServiceProvider.GetRequiredService<BettingService>();
                             foreach (var userGroup in userSchemes)
                             {
-                                var userId = userGroup.Key;
-                                gameService.AddLog($"[{groupId}] 开始销售 期号: {context.CurrentIssue}", userId);
+                                var loopUserId = userGroup.Key;
+                                gameService.AddLog($"[{groupId}] 开始销售 期号: {context.CurrentIssue}", loopUserId);
                                 // 获取方案名用于日志
                                 var schemeNames = string.Join(",", userGroup.Select(s => s.Name));
-                                gameService.AddLog($"[{groupId}] 处理方案: {schemeNames}", userId);
-                                await bettingService.ProcessBetting(groupId, context, userId);
+                                gameService.AddLog($"[{groupId}] 处理方案: {schemeNames}", loopUserId);
+                                await bettingService.ProcessBetting(groupId, context, loopUserId);
                             }
                             break;
 
@@ -589,9 +589,9 @@ namespace QuantumIdleWEB.Services
                                 // 为每个用户触发结算
                                 foreach (var userGroup in userSchemes)
                                 {
-                                    var userId = userGroup.Key;
-                                    gameService.AddLog($"[{groupId}] 开奖结果 期号: {lastRecord.IssueNumber} 结果: {lastRecord.Result}", userId);
-                                    await settlementService.ProcessSettlement(groupId, lastRecord.IssueNumber, lastRecord.Result, userId);
+                                    var loopUserId = userGroup.Key;
+                                    gameService.AddLog($"[{groupId}] 开奖结果 期号: {lastRecord.IssueNumber} 结果: {lastRecord.Result}", loopUserId);
+                                    await settlementService.ProcessSettlement(groupId, lastRecord.IssueNumber, lastRecord.Result, loopUserId);
                                 }
                             }
                             else

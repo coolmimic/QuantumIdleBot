@@ -22,16 +22,36 @@ namespace QuantumIdleWEB.Services
         }
 
         // ========== 按用户隔离的状态 ==========
-        private readonly ConcurrentDictionary<int, bool> _userRunningState = new();
-        private readonly ConcurrentDictionary<int, bool> _userSimulationState = new();
+        
+        // 定义内部状态类
+        public class UserGameState
+        {
+            public bool IsRunning { get; set; }
+            public bool IsSimulation { get; set; }
+            public decimal Balance { get; set; }
+            public decimal Profit { get; set; }
+            public decimal Turnover { get; set; }
+            public decimal SimProfit { get; set; }
+            public decimal SimTurnover { get; set; }
+        }
+
+        private readonly ConcurrentDictionary<int, UserGameState> _userStates = new();
+
+        /// <summary>
+        /// 获取指定用户的状态对象（不存在则创建）
+        /// </summary>
+        private UserGameState GetUserState(int userId)
+        {
+            return _userStates.GetOrAdd(userId, _ => new UserGameState());
+        }
 
         /// <summary>
         /// 获取/设置指定用户的运行状态
         /// </summary>
         public bool IsRunning
         {
-            get => _userRunningState.GetValueOrDefault(CurrentUserId, false);
-            set => _userRunningState[CurrentUserId] = value;
+            get => GetUserState(CurrentUserId).IsRunning;
+            set => GetUserState(CurrentUserId).IsRunning = value;
         }
 
         /// <summary>
@@ -39,25 +59,49 @@ namespace QuantumIdleWEB.Services
         /// </summary>
         public bool IsSimulation
         {
-            get => _userSimulationState.GetValueOrDefault(CurrentUserId, false);
-            set => _userSimulationState[CurrentUserId] = value;
+            get => GetUserState(CurrentUserId).IsSimulation;
+            set => GetUserState(CurrentUserId).IsSimulation = value;
         }
 
-        /// <summary>
-        /// 为指定用户ID获取运行状态（不依赖CurrentUserId）
-        /// </summary>
-        public bool GetIsRunning(int userId) => _userRunningState.GetValueOrDefault(userId, false);
-        public void SetIsRunning(int userId, bool value) => _userRunningState[userId] = value;
-        
-        public bool GetIsSimulation(int userId) => _userSimulationState.GetValueOrDefault(userId, false);
-        public void SetIsSimulation(int userId, bool value) => _userSimulationState[userId] = value;
+        // ========== 按用户访问的方法 ==========
 
-        // 全局统计（向后兼容）
-        public decimal Balance { get; set; } = 0;
-        public decimal Profit { get; set; } = 0;
-        public decimal Turnover { get; set; } = 0;
-        public decimal SimProfit { get; set; } = 0;
-        public decimal SimTurnover { get; set; } = 0;
+        public bool GetIsRunning(int userId) => GetUserState(userId).IsRunning;
+        public void SetIsRunning(int userId, bool value) => GetUserState(userId).IsRunning = value;
+        
+        public bool GetIsSimulation(int userId) => GetUserState(userId).IsSimulation;
+        public void SetIsSimulation(int userId, bool value) => GetUserState(userId).IsSimulation = value;
+
+        // ========== 统计数据访问（按当前用户） ==========
+        
+        public decimal Balance 
+        { 
+            get => GetUserState(CurrentUserId).Balance;
+            set => GetUserState(CurrentUserId).Balance = value;
+        }
+        
+        public decimal Profit 
+        { 
+            get => GetUserState(CurrentUserId).Profit;
+            set => GetUserState(CurrentUserId).Profit = value;
+        }
+        
+        public decimal Turnover 
+        { 
+            get => GetUserState(CurrentUserId).Turnover;
+            set => GetUserState(CurrentUserId).Turnover = value;
+        }
+        
+        public decimal SimProfit 
+        { 
+            get => GetUserState(CurrentUserId).SimProfit;
+            set => GetUserState(CurrentUserId).SimProfit = value;
+        }
+        
+        public decimal SimTurnover 
+        { 
+            get => GetUserState(CurrentUserId).SimTurnover;
+            set => GetUserState(CurrentUserId).SimTurnover = value;
+        }
 
         public event Action<string>? OnLog;
 

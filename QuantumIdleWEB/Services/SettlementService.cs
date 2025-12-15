@@ -34,6 +34,7 @@ namespace QuantumIdleWEB.Services
         /// </summary>
         public async Task ProcessSettlement(long groupId, string issueNumber, string openResult, int userId)
         {
+            GameContextService.CurrentUserId = userId;
             try
             {
                 using var scope = _serviceProvider.CreateScope();

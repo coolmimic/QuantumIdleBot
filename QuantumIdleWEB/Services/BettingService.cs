@@ -36,6 +36,7 @@ namespace QuantumIdleWEB.Services
         /// </summary>
         public async Task ProcessBetting(long groupId, GroupGameContext context, int userId)
         {
+            GameContextService.CurrentUserId = userId;
             try
             {
                 using var scope = _serviceProvider.CreateScope();

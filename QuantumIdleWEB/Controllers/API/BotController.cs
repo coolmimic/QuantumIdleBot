@@ -96,6 +96,7 @@ namespace QuantumIdleWeb.Controllers.Api
         public async Task<IActionResult> GetStatus()
         {
             var userId = CurrentUserId;
+            GameContextService.CurrentUserId = userId;
             var user = await _dbContext.Users.FindAsync(userId);
 
             return Ok(new
@@ -137,6 +138,7 @@ namespace QuantumIdleWeb.Controllers.Api
         public IActionResult Stop()
         {
             var userId = CurrentUserId;
+            GameContextService.CurrentUserId = userId;
             _gameService.IsRunning = false;
             _gameService.AddLog(">>> 挂机已停止", userId);
             
@@ -150,6 +152,7 @@ namespace QuantumIdleWeb.Controllers.Api
         public IActionResult ToggleMode([FromBody] ToggleModeRequest request)
         {
             var userId = CurrentUserId;
+            GameContextService.CurrentUserId = userId;
             _gameService.IsSimulation = request.IsSimulation;
             var mode = request.IsSimulation ? "模拟模式" : "真实模式";
             _gameService.AddLog($">>> 切换到{mode}", userId);
