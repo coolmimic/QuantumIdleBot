@@ -98,6 +98,9 @@ builder.Services.AddScoped<QuantumIdleWEB.Services.SettlementService>();
 // 注册推送通知服务
 builder.Services.AddSingleton<QuantumIdleWEB.Services.NotificationService>();
 
+// 注册验证码服务
+builder.Services.AddSingleton<QuantumIdleWEB.Services.CaptchaService>();
+
 // ע�� TelegramBotClient
 builder.Services.AddSingleton<Telegram.Bot.ITelegramBotClient>(provider =>
 {

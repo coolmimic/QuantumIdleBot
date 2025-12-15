@@ -16,19 +16,30 @@ namespace QuantumIdleWEB.Controllers.API
     public class UserController : Controller
     {
         private readonly ApplicationDbContext _context;
-        private readonly IConfiguration _configuration; // <--- 1. 新增配置注入
+        private readonly IConfiguration _configuration;
+        private readonly QuantumIdleWEB.Services.CaptchaService _captchaService;
 
-        // 修改构造函数，接收 IConfiguration
-        public UserController(ApplicationDbContext context, IConfiguration configuration)
+        public UserController(ApplicationDbContext context, IConfiguration configuration, QuantumIdleWEB.Services.CaptchaService captchaService)
         {
             _context = context;
             _configuration = configuration;
+            _captchaService = captchaService;
         }
 
         [HttpGet("getitme")]
         public string getitme()
         {
             return DateTime.Now.ToString();
+        }
+
+        /// <summary>
+        /// 获取验证码图片
+        /// </summary>
+        [HttpGet("captcha")]
+        public IActionResult GetCaptcha()
+        {
+            var (captchaId, _, imageBase64) = _captchaService.GenerateCaptcha();
+            return Ok(new { success = true, data = new { captchaId, image = imageBase64 } });
         }
 
         // ========================================
@@ -53,7 +64,17 @@ namespace QuantumIdleWEB.Controllers.API
                 clientIp = forwardedFor.Split(',').First().Trim();
             }
 
-            // 1. IP 限流检查
+            // 1. 验证码验证
+            if (string.IsNullOrEmpty(request.CaptchaId) || string.IsNullOrEmpty(request.CaptchaCode))
+            {
+                return BadRequest(new { success = false, message = "请输入验证码" });
+            }
+            if (!_captchaService.Validate(request.CaptchaId, request.CaptchaCode))
+            {
+                return BadRequest(new { success = false, message = "验证码错误或已过期" });
+            }
+
+            // 2. IP 限流检查
             var now = DateTime.Now;
             if (_registerAttempts.TryGetValue(clientIp, out var attempt))
             {

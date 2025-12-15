@@ -17,5 +17,9 @@ namespace QuantumIdleModels.DTOs
         [Required(ErrorMessage = "密码不能为空")]
         [MinLength(6, ErrorMessage = "密码长度至少需要 6 位")]
         public string Password { get; set; }
+
+        // 3. 验证码相关（注册时需要）
+        public string? CaptchaId { get; set; }
+        public string? CaptchaCode { get; set; }
     }
 }
